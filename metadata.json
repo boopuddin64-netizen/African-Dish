@@ -1,0 +1,8 @@
+{
+  "name": "Personalized Food Marketplace",
+  "description": "A calm, recommendation-first food marketplace specializing in African cuisine with a 3-meal contextual engine and low-friction ordering.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "users": {
+      "title": "Users",
+      "description": "User profiles, role, preferences, safety, and saved locations",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string", "enum": ["customer", "restaurant_staff", "courier", "admin"] },
+        "theme": { "type": "string" },
+        "currentLocationId": { "type": "string text" },
+        "savedLocations": { "type": "array" },
+        "preferences": { "type": "object" },
+        "safety": { "type": "object" },
+        "behavior": { "type": "object" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "name", "role"]
+    },
+    "restaurants": {
+      "title": "Restaurants",
+      "description": "Restaurant marketplace listings, operating hours, and availability",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "tagline": { "type": "string" },
+        "description": { "type": "string" },
+        "city": { "type": "string" },
+        "address": { "type": "string" },
+        "coordinates": { "type": "object" },
+        "phone": { "type": "string" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "image": { "type": "string" },
+        "logo": { "type": "string" },
+        "isOpen": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["open", "closed", "temporarily_unavailable", "busy"] },
+        "acceptingOrders": { "type": "boolean" },
+        "isDemo": { "type": "boolean" },
+        "orderAcceptanceMode": { "type": "string" },
+        "operatingHours": { "type": "string" },
+        "hygieneRating": { "type": "string" },
+        "allergenPledge": { "type": "string" },
+        "cuisines": { "type": "array" },
+        "deliveryFeeNGN": { "type": "number" },
+        "deliveryFeeGBP": { "type": "number" }
+      },
+      "required": ["name", "isOpen", "isDemo"]
+    },
+    "meals": {
+      "title": "Meals",
+      "description": "Dishes available in restaurants",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "priceNGN": { "type": "number" },
+        "priceGBP": { "type": "number" },
+        "restaurantId": { "type": "string" },
+        "restaurantName": { "type": "string" },
+        "city": { "type": "string" },
+        "cuisine": { "type": "string" },
+        "category": { "type": "string" },
+        "image": { "type": "string" },
+        "ingredients": { "type": "array" },
+        "allergens": { "type": "array" },
+        "isAvailable": { "type": "boolean" },
+        "isDemo": { "type": "boolean" }
+      },
+      "required": ["name", "restaurantId", "priceNGN", "isAvailable"]
+    },
+    "orders": {
+      "title": "Orders",
+      "description": "Customer order records and state machine",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string" },
+        "userId": { "type": "string" },
+        "customerName": { "type": "string text" },
+        "customerPhone": { "type": "string" },
+        "restaurantId": { "type": "string" },
+        "restaurantName": { "type": "string" },
+        "status": { "type": "string" },
+        "items": { "type": "array" },
+        "deliveryAddress": { "type": "object" },
+        "subtotal": { "type": "number" },
+        "deliveryFee": { "type": "number" },
+        "serviceFee": { "type": "number text" },
+        "total": { "type": "number" },
+        "currency": { "type": "string" },
+        "paymentStatus": { "type": "string" },
+        "paymentReference": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "tapCount": { "type": "number" }
+      },
+      "required": ["orderNumber", "userId", "restaurantId", "status", "total"]
+    },
+    "recommendation_events": {
+      "title": "Recommendation Events",
+      "description": "Analytics and interaction events for recommendation engine",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "mealId": { "type": "string" },
+        "restaurantId": { "type": "string" },
+        "eventType": { "type": "string" },
+        "rejectionReason": { "type": "string" },
+        "position": { "type": "number" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["userId", "eventType", "timestamp"]
+    }
+  }
+}
