@@ -130,29 +130,33 @@ service cloud.firestore {
         (request.resource.data.status in ['cart', 'checkout', 'payment_pending']) &&
         (request.resource.data.paymentStatus in ['pending', 'unpaid']);
 
-      // Update: State machine transitions and role checks with field-level protection
-      allow update: if isAuthenticated() && 
-        // Immutable core financial and identity fields
-        request.resource.data.userId == resource.data.userId &&
-        request.resource.data.restaurantId == resource.data.restaurantId &&
-        request.resource.data.total == resource.data.total &&
-        request.resource.data.subtotal == resource.data.subtotal &&
-        request.resource.data.createdAt == resource.data.createdAt &&
-        // State machine transition validation
+      // Update: Role-based field allowlists and State Machine transitions
+      allow update: if isAuthenticated() &&
+        // General state machine transition validity check
         isValidOrderTransition(resource.data.status, request.resource.data.status) &&
         (
-          // Customer can cancel or initiate payment
-          (resource.data.userId == request.auth.uid && (
-            request.resource.data.status in ['checkout', 'payment_pending', 'cancelled']
-          )) ||
-          // Restaurant owner can accept, prepare, or reject orders
-          (isRestaurantOwner(resource.data.restaurantId) && (
-            request.resource.data.status in ['accepted', 'preparing', 'ready', 'rejected', 'cancelled']
-          )) ||
-          // Courier can take assigned orders and mark delivered
-          ((resource.data.courierId == request.auth.uid || request.resource.data.courierId == request.auth.uid) && (
-            request.resource.data.status in ['out_for_delivery', 'delivered']
-          )) ||
+          // 1. Customer: Can only update specific fields (status to allowed states, rating, courierMessages, tapCount, updatedAt)
+          (resource.data.userId == request.auth.uid &&
+            request.resource.data.status in ['checkout', 'payment_pending', 'cancelled', resource.data.status] &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'ratingSubmitted', 'courierMessages', 'tapCount', 'updatedAt'
+            ])
+          ) ||
+          // 2. Restaurant Owner: Can only update status to restaurant stages, prep ETA, messages, updatedAt
+          (isRestaurantOwner(resource.data.restaurantId) &&
+            request.resource.data.status in ['accepted', 'preparing', 'ready', 'rejected', 'cancelled', resource.data.status] &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'estimatedDeliveryTime', 'courierMessages', 'updatedAt'
+            ])
+          ) ||
+          // 3. Assigned Courier: Can only update delivery status, deliveredAt, driver info, messages, updatedAt
+          (resource.data.courierId != null && resource.data.courierId == request.auth.uid &&
+            request.resource.data.status in ['out_for_delivery', 'delivered', resource.data.status] &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'deliveredAt', 'driverName', 'driverPhone', 'driverVehicle', 'courierMessages', 'updatedAt'
+            ])
+          ) ||
+          // 4. Admin / Trusted Backend system override
           isAdmin()
         );
 
