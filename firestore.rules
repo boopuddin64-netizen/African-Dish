@@ -2,29 +2,146 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users Collection
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        (getUserData().role == 'admin' || getUserData().isAdmin == true);
+    }
+
+    function isRestaurantOwner(restaurantId) {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/restaurants/$(restaurantId)) &&
+         get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid) ||
+        isAdmin()
+      );
+    }
+
+    // --- Users Collection ---
     match /users/{userId} {
-      allow read, write: if true;
+      allow read: if isOwner(userId) || isAdmin();
+      
+      allow create: if isOwner(userId) && (
+        !('role' in request.resource.data) || 
+        request.resource.data.role == 'customer' || 
+        isAdmin()
+      ) && (
+        !('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false || isAdmin()
+      );
+
+      allow update: if (isOwner(userId) && (
+        // Ensure regular user cannot self-promote to admin or change role
+        (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
+        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == resource.data.isAdmin) &&
+        (!('verified' in request.resource.data) || request.resource.data.verified == resource.data.verified)
+      )) || isAdmin();
+
+      allow delete: if isAdmin();
     }
 
-    // Restaurants Collection
+    // --- Restaurants Collection ---
     match /restaurants/{restaurantId} {
-      allow read, write: if true;
+      // Public read for marketplace display
+      allow read: if true;
+
+      // Creation & modifications restricted to restaurant owner or admin
+      allow create: if isAuthenticated() && (
+        request.resource.data.ownerId == request.auth.uid || isAdmin()
+      );
+
+      allow update: if isAuthenticated() && (
+        resource.data.ownerId == request.auth.uid || isAdmin()
+      );
+
+      allow delete: if isAdmin();
     }
 
-    // Meals Collection
+    // --- Meals Collection ---
     match /meals/{mealId} {
-      allow read, write: if true;
+      // Public read for marketplace display
+      allow read: if true;
+
+      // Only the restaurant owner can manage meals for their restaurant
+      allow create: if isAuthenticated() && (
+        isRestaurantOwner(request.resource.data.restaurantId) || isAdmin()
+      );
+
+      allow update: if isAuthenticated() && (
+        isRestaurantOwner(resource.data.restaurantId) || isAdmin()
+      );
+
+      allow delete: if isAuthenticated() && (
+        isRestaurantOwner(resource.data.restaurantId) || isAdmin()
+      );
     }
 
-    // Orders Collection
+    // --- Orders Collection ---
     match /orders/{orderId} {
-      allow read, write: if true;
+      // Single document fetch
+      allow get: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isRestaurantOwner(resource.data.restaurantId) ||
+        (resource.data.courierId != null && resource.data.courierId == request.auth.uid) ||
+        isAdmin()
+      );
+
+      // Collection list queries
+      allow list: if isAuthenticated() && (
+        (resource.data.userId == request.auth.uid) ||
+        (resource.data.courierId != null && resource.data.courierId == request.auth.uid) ||
+        (resource.data.restaurantId != null && isRestaurantOwner(resource.data.restaurantId)) ||
+        isAdmin()
+      );
+
+      // Create: Customer can create their own order with valid initial status
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid &&
+        (request.resource.data.status in ['cart', 'checkout', 'payment_pending']) &&
+        (request.resource.data.paymentStatus in ['pending', 'unpaid']);
+
+      // Update: State machine transitions and role checks
+      allow update: if isAuthenticated() && (
+        // Customer can cancel or initiate payment
+        (resource.data.userId == request.auth.uid && (
+          request.resource.data.status in ['checkout', 'payment_pending', 'cancelled']
+        )) ||
+        // Restaurant owner can accept, prepare, or reject orders
+        (isRestaurantOwner(resource.data.restaurantId) && (
+          request.resource.data.status in ['accepted', 'preparing', 'ready', 'rejected', 'cancelled']
+        )) ||
+        // Courier can take assigned orders and mark delivered
+        ((resource.data.courierId == request.auth.uid || request.resource.data.courierId == request.auth.uid) && (
+          request.resource.data.status in ['out_for_delivery', 'delivered']
+        )) ||
+        isAdmin()
+      );
+
+      allow delete: if isAdmin();
     }
 
-    // Recommendation Events Collection
+    // --- Recommendation Events Collection ---
     match /recommendation_events/{eventId} {
-      allow read, write: if true;
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+
+      allow create: if isAuthenticated() && (
+        request.resource.data.userId == request.auth.uid
+      );
+
+      allow update, delete: if isAdmin();
     }
   }
 }

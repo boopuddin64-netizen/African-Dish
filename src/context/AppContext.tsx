@@ -118,7 +118,9 @@ interface AppContextType {
   isRestaurantDetailsModalOpen: boolean;
   selectedRestaurantForDetails: Restaurant | null;
   openRestaurantDetails: (restaurant: Restaurant) => void;
+  openRestaurantDetailsModal: (restaurantOrId: Restaurant | string) => void;
   closeRestaurantDetails: () => void;
+  closeRestaurantDetailsModal: () => void;
 
   // Cart
   cartItems: CartItem[];
@@ -276,7 +278,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Sync Orders for current active user
   useEffect(() => {
-    if (!userProfile?.id) return;
+    if (!userProfile?.id || userProfile.id === 'guest_demo_user' || userProfile.id.startsWith('guest_')) {
+      return;
+    }
     const unsub = subscribeToOrders(
       userProfile.id,
       userProfile.role,
@@ -844,9 +848,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setIsRestaurantDetailsModalOpen(true);
   };
 
+  const openRestaurantDetailsModal = (restaurantOrId: Restaurant | string) => {
+    let restaurant: Restaurant | undefined;
+    if (typeof restaurantOrId === 'string') {
+      restaurant = allRestaurants.find(r => r.id === restaurantOrId);
+    } else {
+      restaurant = restaurantOrId;
+    }
+    if (restaurant) {
+      openRestaurantDetails(restaurant);
+    }
+  };
+
   const closeRestaurantDetails = () => {
     setIsRestaurantDetailsModalOpen(false);
   };
+
+  const closeRestaurantDetailsModal = closeRestaurantDetails;
 
   const sendCourierMessage = (orderId: string, text: string) => {
     if (!text.trim()) return;
@@ -925,7 +943,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isRestaurantDetailsModalOpen,
         selectedRestaurantForDetails,
         openRestaurantDetails,
+        openRestaurantDetailsModal,
         closeRestaurantDetails,
+        closeRestaurantDetailsModal,
         cartItems,
         addToCart,
         removeFromCart,

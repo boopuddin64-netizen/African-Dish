@@ -10,13 +10,14 @@ import { db } from '../lib/firebase';
 import { Restaurant, Meal } from '../types';
 import { RESTAURANTS, MEALS } from '../data/mockData';
 import { CITY_COORDINATES } from './locationService';
+import { handleFirestoreError } from '../lib/errorHandling';
 
 export const RESTAURANTS_COLLECTION = 'restaurants';
 export const MEALS_COLLECTION = 'meals';
 
 /**
  * Seeds initial restaurant and meal data to Firestore if not already seeded.
- * All default mock items are marked with isDemo: true.
+ * Prevents overwriting user modifications once seeded.
  */
 export async function seedFirestoreInitialData(): Promise<void> {
   try {
@@ -38,17 +39,20 @@ export async function seedFirestoreInitialData(): Promise<void> {
       }
     }
 
-    // Upsert demo meals into Firestore so new items are guaranteed to populate
-    for (const m of MEALS) {
-      const demoMeal: Meal = {
-        ...m,
-        isAvailable: true,
-        isDemo: true
-      };
-      await setDoc(doc(db, MEALS_COLLECTION, m.id), demoMeal, { merge: true });
+    const mealsSnap = await getDocs(collection(db, MEALS_COLLECTION));
+    if (mealsSnap.empty) {
+      console.log('Seeding initial Demo Meals to Firestore...');
+      for (const m of MEALS) {
+        const demoMeal: Meal = {
+          ...m,
+          isAvailable: true,
+          isDemo: true
+        };
+        await setDoc(doc(db, MEALS_COLLECTION, m.id), demoMeal);
+      }
     }
   } catch (err) {
-    console.error('Error seeding Firestore data:', err);
+    handleFirestoreError(err, { operation: 'create', path: 'seedInitialData' });
   }
 }
 
@@ -64,7 +68,7 @@ export function subscribeToRestaurants(callback: (restaurants: Restaurant[]) => 
     });
     callback(list);
   }, (error) => {
-    console.error('Error in restaurant snapshot:', error);
+    handleFirestoreError(error, { operation: 'subscribe', path: RESTAURANTS_COLLECTION });
   });
 }
 
@@ -72,6 +76,11 @@ export function subscribeToRestaurants(callback: (restaurants: Restaurant[]) => 
  * Updates a restaurant's availability or settings in Firestore.
  */
 export async function updateRestaurant(restaurantId: string, updates: Partial<Restaurant>): Promise<void> {
-  const ref = doc(db, RESTAURANTS_COLLECTION, restaurantId);
-  await setDoc(ref, updates, { merge: true });
+  try {
+    const ref = doc(db, RESTAURANTS_COLLECTION, restaurantId);
+    await setDoc(ref, updates, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, { operation: 'update', path: `${RESTAURANTS_COLLECTION}/${restaurantId}` });
+  }
 }
+

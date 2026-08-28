@@ -10,6 +10,7 @@ import {
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { UserProfile, UserRole } from '../types';
+import { handleFirestoreError } from '../lib/errorHandling';
 
 export const DEFAULT_USER_PROFILE: UserProfile = {
   id: 'guest_demo_user',
@@ -71,23 +72,46 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     }
     return null;
   } catch (err) {
-    console.error('Error fetching user profile:', err);
+    handleFirestoreError(err, { operation: 'get', path: `users/${uid}` });
     return null;
   }
 }
 
 export async function createUserProfile(uid: string, data: Partial<UserProfile>): Promise<UserProfile> {
-  const profile: UserProfile = {
-    ...DEFAULT_USER_PROFILE,
-    ...data,
-    id: uid,
-  };
-  await setDoc(doc(db, 'users', uid), profile, { merge: true });
-  return profile;
+  try {
+    // Sanitize privileged properties during self-registration
+    const sanitizedData = { ...data };
+    if (!sanitizedData.role) sanitizedData.role = 'customer';
+
+    const profile: UserProfile = {
+      ...DEFAULT_USER_PROFILE,
+      ...sanitizedData,
+      id: uid,
+    };
+    await setDoc(doc(db, 'users', uid), profile, { merge: true });
+    return profile;
+  } catch (err) {
+    handleFirestoreError(err, { operation: 'create', path: `users/${uid}` });
+    throw err;
+  }
 }
 
 export async function updateUserProfile(uid: string, updates: Partial<UserProfile>): Promise<void> {
-  await setDoc(doc(db, 'users', uid), updates, { merge: true });
+  if (uid === 'guest_demo_user' || uid.startsWith('guest_')) {
+    // Do not attempt to persist guest user profile to Firestore
+    return;
+  }
+
+  try {
+    // Protect role/admin state from arbitrary client update calls
+    const safeUpdates = { ...updates };
+    delete (safeUpdates as any).isAdmin;
+    delete (safeUpdates as any).verified;
+
+    await setDoc(doc(db, 'users', uid), safeUpdates, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, { operation: 'update', path: `users/${uid}` });
+  }
 }
 
 export function subscribeToAuthChanges(callback: (user: UserProfile | null) => void) {
@@ -137,3 +161,4 @@ export async function loginWithGoogle(): Promise<UserProfile> {
 export async function logoutUser(): Promise<void> {
   await firebaseSignOut(auth);
 }
+
