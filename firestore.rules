@@ -29,6 +29,25 @@ service cloud.firestore {
       );
     }
 
+    // Order state machine helper
+    function isValidOrderTransition(oldStatus, newStatus) {
+      return oldStatus == newStatus ||
+        (oldStatus == 'cart' && newStatus in ['checkout', 'payment_pending', 'cancelled']) ||
+        (oldStatus == 'checkout' && newStatus in ['payment_pending', 'cancelled']) ||
+        (oldStatus == 'payment_pending' && newStatus in ['paid', 'payment_failed', 'cancelled']) ||
+        (oldStatus == 'paid' && newStatus in ['restaurant_pending', 'accepted', 'rejected', 'cancelled']) ||
+        (oldStatus == 'restaurant_pending' && newStatus in ['accepted', 'rejected', 'cancelled']) ||
+        (oldStatus == 'accepted' && newStatus in ['preparing', 'cancelled']) ||
+        (oldStatus == 'preparing' && newStatus in ['ready', 'cancelled']) ||
+        (oldStatus == 'ready' && newStatus in ['out_for_delivery', 'delivered', 'cancelled']) ||
+        (oldStatus == 'out_for_delivery' && newStatus in ['delivered', 'cancelled']) ||
+        (oldStatus == 'payment_failed' && newStatus in ['payment_pending', 'cancelled']) ||
+        (oldStatus == 'rejected' && newStatus in ['refunded']) ||
+        (oldStatus == 'cancelled' && newStatus in ['refunded']) ||
+        (oldStatus == 'confirmed' && newStatus in ['preparing', 'out_for_delivery', 'delivered']) ||
+        (oldStatus == 'on_the_way' && newStatus == 'delivered');
+    }
+
     // --- Users Collection ---
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
@@ -111,22 +130,31 @@ service cloud.firestore {
         (request.resource.data.status in ['cart', 'checkout', 'payment_pending']) &&
         (request.resource.data.paymentStatus in ['pending', 'unpaid']);
 
-      // Update: State machine transitions and role checks
-      allow update: if isAuthenticated() && (
-        // Customer can cancel or initiate payment
-        (resource.data.userId == request.auth.uid && (
-          request.resource.data.status in ['checkout', 'payment_pending', 'cancelled']
-        )) ||
-        // Restaurant owner can accept, prepare, or reject orders
-        (isRestaurantOwner(resource.data.restaurantId) && (
-          request.resource.data.status in ['accepted', 'preparing', 'ready', 'rejected', 'cancelled']
-        )) ||
-        // Courier can take assigned orders and mark delivered
-        ((resource.data.courierId == request.auth.uid || request.resource.data.courierId == request.auth.uid) && (
-          request.resource.data.status in ['out_for_delivery', 'delivered']
-        )) ||
-        isAdmin()
-      );
+      // Update: State machine transitions and role checks with field-level protection
+      allow update: if isAuthenticated() && 
+        // Immutable core financial and identity fields
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.restaurantId == resource.data.restaurantId &&
+        request.resource.data.total == resource.data.total &&
+        request.resource.data.subtotal == resource.data.subtotal &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        // State machine transition validation
+        isValidOrderTransition(resource.data.status, request.resource.data.status) &&
+        (
+          // Customer can cancel or initiate payment
+          (resource.data.userId == request.auth.uid && (
+            request.resource.data.status in ['checkout', 'payment_pending', 'cancelled']
+          )) ||
+          // Restaurant owner can accept, prepare, or reject orders
+          (isRestaurantOwner(resource.data.restaurantId) && (
+            request.resource.data.status in ['accepted', 'preparing', 'ready', 'rejected', 'cancelled']
+          )) ||
+          // Courier can take assigned orders and mark delivered
+          ((resource.data.courierId == request.auth.uid || request.resource.data.courierId == request.auth.uid) && (
+            request.resource.data.status in ['out_for_delivery', 'delivered']
+          )) ||
+          isAdmin()
+        );
 
       allow delete: if isAdmin();
     }
