@@ -18,7 +18,7 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && 
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-        (getUserData().role == 'admin' || getUserData().isAdmin == true);
+        (getUserData().get('role', '') == 'admin' || getUserData().get('isAdmin', false) == true);
     }
 
     function isRestaurantOwner(restaurantId) {
