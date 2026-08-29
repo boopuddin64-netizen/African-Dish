@@ -11,22 +11,39 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function userExists() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
     function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function isAdmin() {
-      return isAuthenticated() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+      return userExists() && 
         (getUserData().get('role', '') == 'admin' || getUserData().get('isAdmin', false) == true);
     }
 
     function isRestaurantOwner(restaurantId) {
       return isAuthenticated() && (
         (exists(/databases/$(database)/documents/restaurants/$(restaurantId)) &&
-         get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid) ||
+         get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.get('ownerId', '') == request.auth.uid) ||
         isAdmin()
       );
+    }
+
+    function isRestaurantStaff(restaurantId) {
+      return isAuthenticated() && (
+        (userExists() &&
+         getUserData().get('role', '') == 'restaurant_staff' &&
+         getUserData().get('kitchenStaff', {}).get('assignedRestaurantId', '') == restaurantId) ||
+        (exists(/databases/$(database)/documents/restaurants/$(restaurantId)) &&
+         request.auth.uid in get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.get('staffIds', []))
+      );
+    }
+
+    function isRestaurantAuthorized(restaurantId) {
+      return isRestaurantOwner(restaurantId) || isRestaurantStaff(restaurantId) || isAdmin();
     }
 
     // Order state machine helper
@@ -61,10 +78,10 @@ service cloud.firestore {
       );
 
       allow update: if (isOwner(userId) && (
-        // Ensure regular user cannot self-promote to admin or change role
-        (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
-        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == resource.data.isAdmin) &&
-        (!('verified' in request.resource.data) || request.resource.data.verified == resource.data.verified)
+        // Ensure user cannot self-promote to admin or change role/verification
+        (!('role' in request.resource.data) || request.resource.data.get('role', '') == resource.data.get('role', '')) &&
+        (!('isAdmin' in request.resource.data) || request.resource.data.get('isAdmin', false) == resource.data.get('isAdmin', false)) &&
+        (!('verified' in request.resource.data) || request.resource.data.get('verified', false) == resource.data.get('verified', false))
       )) || isAdmin();
 
       allow delete: if isAdmin();
@@ -75,13 +92,18 @@ service cloud.firestore {
       // Public read for marketplace display
       allow read: if true;
 
-      // Creation & modifications restricted to restaurant owner or admin
+      // Creation restricted to restaurant owner or admin
       allow create: if isAuthenticated() && (
-        request.resource.data.ownerId == request.auth.uid || isAdmin()
+        request.resource.data.get('ownerId', '') == request.auth.uid || isAdmin()
       );
 
+      // Update: only the restaurant owner or admin can update; ownership transfer/ownerId change is strictly forbidden
       allow update: if isAuthenticated() && (
-        resource.data.ownerId == request.auth.uid || isAdmin()
+        (
+          resource.data.get('ownerId', '') == request.auth.uid &&
+          (!('ownerId' in request.resource.data) || request.resource.data.ownerId == resource.data.get('ownerId', ''))
+        ) || 
+        isAdmin()
       );
 
       allow delete: if isAdmin();
@@ -92,17 +114,23 @@ service cloud.firestore {
       // Public read for marketplace display
       allow read: if true;
 
-      // Only the restaurant owner can manage meals for their restaurant
+      // Only authorized restaurant owner/staff or admin can create meals for their restaurant
       allow create: if isAuthenticated() && (
-        isRestaurantOwner(request.resource.data.restaurantId) || isAdmin()
+        isRestaurantAuthorized(request.resource.data.restaurantId) || isAdmin()
       );
 
+      // Only authorized restaurant owner/staff or admin can update, AND restaurantId cannot be transferred
       allow update: if isAuthenticated() && (
-        isRestaurantOwner(resource.data.restaurantId) || isAdmin()
+        (
+          isRestaurantAuthorized(resource.data.restaurantId) &&
+          (!('restaurantId' in request.resource.data) || request.resource.data.restaurantId == resource.data.restaurantId)
+        ) || 
+        isAdmin()
       );
 
+      // Only authorized restaurant owner/staff or admin can delete meals
       allow delete: if isAuthenticated() && (
-        isRestaurantOwner(resource.data.restaurantId) || isAdmin()
+        isRestaurantAuthorized(resource.data.restaurantId) || isAdmin()
       );
     }
 
@@ -111,16 +139,16 @@ service cloud.firestore {
       // Single document fetch
       allow get: if isAuthenticated() && (
         resource.data.userId == request.auth.uid ||
-        isRestaurantOwner(resource.data.restaurantId) ||
-        (resource.data.courierId != null && resource.data.courierId == request.auth.uid) ||
+        isRestaurantAuthorized(resource.data.restaurantId) ||
+        (resource.data.get('courierId', '') != '' && resource.data.get('courierId', '') == request.auth.uid) ||
         isAdmin()
       );
 
       // Collection list queries
       allow list: if isAuthenticated() && (
         (resource.data.userId == request.auth.uid) ||
-        (resource.data.courierId != null && resource.data.courierId == request.auth.uid) ||
-        (resource.data.restaurantId != null && isRestaurantOwner(resource.data.restaurantId)) ||
+        (resource.data.get('courierId', '') != '' && resource.data.get('courierId', '') == request.auth.uid) ||
+        (resource.data.restaurantId != null && isRestaurantAuthorized(resource.data.restaurantId)) ||
         isAdmin()
       );
 
@@ -142,15 +170,15 @@ service cloud.firestore {
               'status', 'ratingSubmitted', 'courierMessages', 'tapCount', 'updatedAt'
             ])
           ) ||
-          // 2. Restaurant Owner: Can only update status to restaurant stages, prep ETA, messages, updatedAt
-          (isRestaurantOwner(resource.data.restaurantId) &&
+          // 2. Restaurant Owner / Authorized Staff: Can only update status to restaurant stages, prep ETA, courier assignment, messages, updatedAt
+          (isRestaurantAuthorized(resource.data.restaurantId) &&
             request.resource.data.status in ['accepted', 'preparing', 'ready', 'rejected', 'cancelled', resource.data.status] &&
             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'status', 'estimatedDeliveryTime', 'courierMessages', 'updatedAt'
+              'status', 'estimatedDeliveryTime', 'courierMessages', 'updatedAt', 'courierId'
             ])
           ) ||
           // 3. Assigned Courier: Can only update delivery status, deliveredAt, driver info, messages, updatedAt
-          (resource.data.courierId != null && resource.data.courierId == request.auth.uid &&
+          (resource.data.get('courierId', '') != '' && resource.data.get('courierId', '') == request.auth.uid &&
             request.resource.data.status in ['out_for_delivery', 'delivered', resource.data.status] &&
             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'status', 'deliveredAt', 'driverName', 'driverPhone', 'driverVehicle', 'courierMessages', 'updatedAt'

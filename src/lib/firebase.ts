@@ -1,14 +1,14 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import config from '../../firebase-applet-config.json';
 
 const app = getApps().length === 0 ? initializeApp(config) : getApp();
 
-// Use explicit databaseId if provided in config, with forced long polling to prevent 10s WebChannel timeout in container/iframe environments
-export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-}, config.firestoreDatabaseId || undefined);
+// Initialize Firestore using the standard SDK helper and designated database ID
+export const db = config.firestoreDatabaseId 
+  ? getFirestore(app, config.firestoreDatabaseId)
+  : getFirestore(app);
 
 export const auth = getAuth(app);
 
