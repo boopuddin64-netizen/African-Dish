@@ -320,154 +320,82 @@ export async function runRealFirestoreRulesTests() {
   }
 
   console.log('\n====================================================');
-  console.log('1. RESTAURANT AUTHORIZATION HARDENING TESTS (1 - 7)');
+  console.log('RESTAURANT SECURITY TESTS (1 - 11)');
   console.log('====================================================');
 
-  // 1. Restaurant A owner attempts to modify Restaurant B
-  await testAssertFails(1, 'Restaurant A owner attempts to modify Restaurant B document', 
+  // 1. Restaurant A attempts to read Restaurant B's protected data
+  await testAssertFails(1, 'Restaurant A attempts to read Restaurant B protected order data', 
+    getDoc(doc(samDb, 'orders', 'ord_rest_b_order'))
+  );
+  await testAssertFails(1, 'Restaurant A attempts to read Restaurant B private user profile data', 
+    getDoc(doc(samDb, 'users', 'owner_ben_b'))
+  );
+
+  // 2. Restaurant A attempts to update Restaurant B
+  await testAssertFails(2, 'Restaurant A owner attempts to update Restaurant B document', 
     updateDoc(doc(samDb, 'restaurants', 'rest_b'), {
       name: 'Hacked Restaurant Beta',
       isOpen: false,
     })
   );
 
-  // 2. Restaurant A attempts to modify Restaurant B meal
-  await testAssertFails(2, 'Restaurant A attempts to modify Restaurant B meal', 
+  // 3. Restaurant A attempts to modify Restaurant B's meal
+  await testAssertFails(3, 'Restaurant A attempts to modify Restaurant B meal', 
     updateDoc(doc(samDb, 'meals', 'meal_b1'), {
       priceGBP: 99.99,
       isAvailable: false,
     })
   );
 
-  // 3. Restaurant A attempts to change a meal\'s restaurantId
-  await testAssertFails(3, 'Restaurant A attempts to change meal restaurantId to Restaurant B', 
+  // 4. Restaurant A attempts to change another meal's restaurantId
+  await testAssertFails(4, 'Restaurant A attempts to change meal restaurantId to Restaurant B', 
     updateDoc(doc(samDb, 'meals', 'meal_a1'), {
       restaurantId: 'rest_b',
     })
   );
 
-  // 4. Restaurant A attempts to change restaurant ownerId
-  await testAssertFails(4, 'Restaurant A owner attempts to change restaurant ownerId (transfer ownership)', 
+  // 5. Restaurant A attempts to change restaurant ownership
+  await testAssertFails(5, 'Restaurant A owner attempts to change restaurant ownerId (transfer ownership)', 
     updateDoc(doc(samDb, 'restaurants', 'rest_a'), {
       ownerId: 'owner_hacker',
     })
   );
 
-  // 5. Restaurant A attempts to modify Restaurant B order
-  await testAssertFails(5, 'Restaurant A owner attempts to modify Restaurant B order status', 
+  // 6. Restaurant A attempts to modify Restaurant B's order
+  await testAssertFails(6, 'Restaurant A owner attempts to modify Restaurant B order status', 
     updateDoc(doc(samDb, 'orders', 'ord_rest_b_order'), {
       status: 'preparing',
     })
   );
 
-  // 6. Restaurant staff attempts to access another restaurant\'s order
-  await testAssertFails(6, 'Restaurant A staff (Sally) attempts to read Restaurant B order document', 
+  // 7. Restaurant staff attempts unauthorized cross-restaurant access
+  await testAssertFails(7, 'Restaurant A staff (Sally) attempts to read Restaurant B order document', 
     getDoc(doc(sallyDb, 'orders', 'ord_rest_b_order'))
   );
+  await testAssertFails(7, 'Staff of Restaurant B (Tim) attempting to operate on Restaurant A order', 
+    updateDoc(doc(timDb, 'orders', 'ord_round1_accepted'), {
+      status: 'ready',
+    })
+  );
 
-  // 7. Restaurant user attempts privilege escalation
-  await testAssertFails(7, 'Restaurant staff user attempts self-promotion to admin role/flag', 
+  // 8. Restaurant account attempts privilege escalation
+  await testAssertFails(8, 'Restaurant user attempts self-promotion to admin role or isAdmin flag', 
     updateDoc(doc(samDb, 'users', 'owner_sam_a'), {
       role: 'admin',
       isAdmin: true,
     })
   );
 
-  console.log('\n====================================================');
-  console.log('2. COURIER AUTHORIZATION HARDENING TESTS (8 - 17)');
-  console.log('====================================================');
-
-  // 8. Courier A attempts to read Courier B\'s assigned order
-  await testAssertFails(8, 'Courier A attempts to read Courier B assigned order document', 
-    getDoc(doc(daveDb, 'orders', 'ord_courier_b_assigned'))
-  );
-
-  // 9. Courier A attempts to modify Courier B\'s order
-  await testAssertFails(9, 'Courier A attempts to modify Courier B order', 
-    updateDoc(doc(daveDb, 'orders', 'ord_courier_b_assigned'), {
-      status: 'out_for_delivery',
-    })
-  );
-
-  // 10. Courier attempts to self-assign to an unassigned order
-  await testAssertFails(10, 'Courier attempts to self-assign to an unassigned order', 
-    updateDoc(doc(daveDb, 'orders', 'ord_unassigned_ready'), {
-      courierId: 'courier_dave_a',
-      status: 'out_for_delivery',
-    })
-  );
-
-  // 11. Courier attempts to replace courierId
-  await testAssertFails(11, 'Courier attempts to replace courierId on assigned order', 
-    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), {
-      courierId: 'courier_carl_b',
-    })
-  );
-
-  // 12. Courier attempts to modify restaurantId
-  await testAssertFails(12, 'Courier attempts to modify restaurantId on assigned order', 
-    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), {
-      restaurantId: 'rest_b',
-    })
-  );
-
-  // 13. Courier attempts to modify customer/userId
-  await testAssertFails(13, 'Courier attempts to modify customer userId on assigned order', 
-    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), {
-      userId: 'cust_bob',
-    })
-  );
-
-  // 14. Courier attempts to modify order total
-  await testAssertFails(14, 'Courier attempts to modify order total', 
-    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), {
-      total: 1.00,
-    })
-  );
-
-  // 15. Courier attempts to modify paymentStatus
-  await testAssertFails(15, 'Courier attempts to modify paymentStatus (e.g. to refunded or paid)', 
-    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), {
-      paymentStatus: 'refunded',
-    })
-  );
-
-  // 16. Courier attempts invalid delivery transition
-  await testAssertFails(16, 'Courier attempts invalid delivery transition from preparing to delivered', 
-    updateDoc(doc(daveDb, 'orders', 'ord_round1_preparing'), {
-      status: 'delivered',
-    })
-  );
-
-  // 17. Courier attempts to modify an unrelated order
-  await testAssertFails(17, 'Courier attempts to modify an unrelated order at another restaurant', 
-    updateDoc(doc(daveDb, 'orders', 'ord_rest_b_order'), {
-      status: 'cancelled',
-    })
-  );
-
-  console.log('\n====================================================');
-  console.log('3. LEGITIMATE OPERATIONS TESTS (18 - 22)');
-  console.log('====================================================');
-
-  // 18. Restaurant owner modifies their own restaurant
-  await testAssertSucceeds(18, 'Restaurant owner modifies their own restaurant profile settings', 
+  // 9. Restaurant owner modifies its own authorized restaurant
+  await testAssertSucceeds(9, 'Restaurant owner modifies its own authorized restaurant profile settings', 
     updateDoc(doc(samDb, 'restaurants', 'rest_a'), {
       isOpen: true,
       prepBufferMinutes: 20,
     })
   );
 
-  // 19. Restaurant owner manages their own meal
-  await testAssertSucceeds(19, 'Restaurant owner manages their own meal price and availability', 
-    updateDoc(doc(samDb, 'meals', 'meal_a1'), {
-      priceGBP: 13.50,
-      isAvailable: true,
-    })
-  );
-
-  // 20. Restaurant staff performs an authorized operational order update
-  await testAssertSucceeds(20, 'Restaurant staff (Sally) performs authorized accepted -> preparing update with ETA', 
+  // 10. Authorized restaurant staff performs an allowed operational update
+  await testAssertSucceeds(10, 'Authorized restaurant staff (Sally) performs allowed accepted -> preparing operational update', 
     updateDoc(doc(sallyDb, 'orders', 'ord_round1_accepted'), {
       status: 'preparing',
       estimatedDeliveryTime: '30 mins',
@@ -475,119 +403,223 @@ export async function runRealFirestoreRulesTests() {
     })
   );
 
-  // 21. Assigned courier performs an authorized delivery update
-  await testAssertSucceeds(21, 'Assigned courier (Dave) performs valid ready -> out_for_delivery update with driver info', 
-    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), {
-      status: 'out_for_delivery',
-      driverName: 'Dave Courier',
-      driverPhone: '+447911123456',
-      driverVehicle: 'Yamaha 125cc',
-      updatedAt: '2026-08-29T10:35:00Z',
-    })
-  );
-
-  // 22. Unauthorized cross-restaurant/cross-courier operations are denied
-  await testAssertFails(22, 'Staff of Restaurant B (Tim) attempting to operate on Restaurant A order is DENIED', 
-    updateDoc(doc(timDb, 'orders', 'ord_round1_accepted'), {
-      status: 'ready',
+  // 11. Authorized restaurant user manages its own restaurant's meal
+  await testAssertSucceeds(11, 'Authorized restaurant user manages its own restaurant meal price and availability', 
+    updateDoc(doc(samDb, 'meals', 'meal_a1'), {
+      priceGBP: 13.50,
+      isAvailable: true,
     })
   );
 
   console.log('\n====================================================');
-  console.log('4. PRESERVED ROUND 1 FINANCIAL, CUSTOMER & SYSTEM INTEGRITY TESTS (23 - 40)');
+  console.log('COURIER SECURITY TESTS (12 - 25)');
   console.log('====================================================');
 
-  // 23. Customer changes total
-  await testAssertFails(23, 'Customer attempts to change order total', 
+  // 12. Courier A reads Courier B's assigned order
+  await testAssertFails(12, 'Courier A attempts to read Courier B assigned order document', 
+    getDoc(doc(daveDb, 'orders', 'ord_courier_b_assigned'))
+  );
+
+  // 13. Courier A modifies Courier B's order
+  await testAssertFails(13, 'Courier A attempts to modify Courier B order', 
+    updateDoc(doc(daveDb, 'orders', 'ord_courier_b_assigned'), {
+      status: 'out_for_delivery',
+    })
+  );
+
+  // 14. Courier attempts to self-assign to an unassigned order
+  await testAssertFails(14, 'Courier attempts to self-assign to an unassigned order', 
+    updateDoc(doc(daveDb, 'orders', 'ord_unassigned_ready'), {
+      courierId: 'courier_dave_a',
+      status: 'out_for_delivery',
+    })
+  );
+
+  // 15. Courier attempts to replace courierId
+  await testAssertFails(15, 'Courier attempts to replace courierId on assigned order', 
+    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), {
+      courierId: 'courier_carl_b',
+    })
+  );
+
+  // 16. Courier attempts to change restaurantId
+  await testAssertFails(16, 'Courier attempts to change restaurantId on assigned order', 
+    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), {
+      restaurantId: 'rest_b',
+    })
+  );
+
+  // 17. Courier attempts to change userId
+  await testAssertFails(17, 'Courier attempts to change customer userId on assigned order', 
+    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), {
+      userId: 'cust_bob',
+    })
+  );
+
+  // 18. Courier attempts to change total/subtotal/fees
+  await testAssertFails(18, 'Courier attempts to change total', 
+    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), { total: 1.00 })
+  );
+  await testAssertFails(18, 'Courier attempts to change subtotal', 
+    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), { subtotal: 1.00 })
+  );
+  await testAssertFails(18, 'Courier attempts to change deliveryFee', 
+    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), { deliveryFee: 0.00 })
+  );
+  await testAssertFails(18, 'Courier attempts to change serviceFee', 
+    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), { serviceFee: 0.00 })
+  );
+
+  // 19. Courier attempts to change paymentStatus
+  await testAssertFails(19, 'Courier attempts to change paymentStatus (e.g. to refunded or paid)', 
+    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), {
+      paymentStatus: 'refunded',
+    })
+  );
+
+  // 20. Courier attempts to change paymentReference
+  await testAssertFails(20, 'Courier attempts to change paymentReference', 
+    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), {
+      paymentReference: 'COURIER_FORGED_PAY_REF',
+    })
+  );
+
+  // 21. Courier attempts to deliver an order from an invalid previous state
+  await testAssertFails(21, 'Courier attempts invalid delivery transition from preparing to delivered', 
+    updateDoc(doc(daveDb, 'orders', 'ord_round1_preparing'), {
+      status: 'delivered',
+    })
+  );
+
+  // 22. Courier attempts to modify an unrelated order
+  await testAssertFails(22, 'Courier attempts to modify an unrelated order at another restaurant', 
+    updateDoc(doc(daveDb, 'orders', 'ord_rest_b_order'), {
+      status: 'cancelled',
+    })
+  );
+
+  // 23. Correctly assigned courier updates an authorized delivery field
+  await testAssertSucceeds(23, 'Correctly assigned courier (Dave) updates authorized driver information fields', 
+    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), {
+      driverName: 'Dave Courier',
+      driverPhone: '+447911123456',
+      driverVehicle: 'Yamaha 125cc Scooter',
+      updatedAt: '2026-08-29T10:30:00Z',
+    })
+  );
+
+  // 24. Correctly assigned courier performs a valid ready -> out_for_delivery transition
+  await testAssertSucceeds(24, 'Correctly assigned courier performs valid ready -> out_for_delivery transition', 
+    updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), {
+      status: 'out_for_delivery',
+      updatedAt: '2026-08-29T10:35:00Z',
+    })
+  );
+
+  // 25. Correctly assigned courier performs a valid out_for_delivery -> delivered transition
+  await testAssertSucceeds(25, 'Correctly assigned courier performs valid out_for_delivery -> delivered transition', 
+    updateDoc(doc(daveDb, 'orders', 'ord_round1_out_for_delivery'), {
+      status: 'delivered',
+      deliveredAt: '2026-08-29T10:55:00Z',
+      updatedAt: '2026-08-29T10:55:00Z',
+    })
+  );
+
+  console.log('\n====================================================');
+  console.log('PRESERVED ROUND 1 FINANCIAL, CUSTOMER & SYSTEM INTEGRITY TESTS (26 - 43)');
+  console.log('====================================================');
+
+  // 26. Customer changes total
+  await testAssertFails(26, 'Customer attempts to change order total', 
     updateDoc(doc(aliceDb, 'orders', 'ord_round1_pending'), { total: 0.50 })
   );
 
-  // 24. Customer changes subtotal
-  await testAssertFails(24, 'Customer attempts to change order subtotal', 
+  // 27. Customer changes subtotal
+  await testAssertFails(27, 'Customer attempts to change order subtotal', 
     updateDoc(doc(aliceDb, 'orders', 'ord_round1_pending'), { subtotal: 1.00 })
   );
 
-  // 25. Customer changes deliveryFee
-  await testAssertFails(25, 'Customer attempts to change deliveryFee', 
+  // 28. Customer changes deliveryFee
+  await testAssertFails(28, 'Customer attempts to change deliveryFee', 
     updateDoc(doc(aliceDb, 'orders', 'ord_round1_pending'), { deliveryFee: 0.00 })
   );
 
-  // 26. Customer changes serviceFee
-  await testAssertFails(26, 'Customer attempts to change serviceFee', 
+  // 29. Customer changes serviceFee
+  await testAssertFails(29, 'Customer attempts to change serviceFee', 
     updateDoc(doc(aliceDb, 'orders', 'ord_round1_pending'), { serviceFee: 0.00 })
   );
 
-  // 27. Customer changes paymentStatus
-  await testAssertFails(27, 'Customer attempts to change paymentStatus to paid', 
+  // 30. Customer changes paymentStatus
+  await testAssertFails(30, 'Customer attempts to change paymentStatus to paid', 
     updateDoc(doc(aliceDb, 'orders', 'ord_round1_pending'), { paymentStatus: 'paid' })
   );
 
-  // 28. Customer changes paymentReference
-  await testAssertFails(28, 'Customer attempts to change paymentReference', 
+  // 31. Customer changes paymentReference
+  await testAssertFails(31, 'Customer attempts to change paymentReference', 
     updateDoc(doc(aliceDb, 'orders', 'ord_round1_pending'), { paymentReference: 'FORGED_REF_999' })
   );
 
-  // 29. Customer changes paymentMethod
-  await testAssertFails(29, 'Customer attempts to change paymentMethod', 
+  // 32. Customer changes paymentMethod
+  await testAssertFails(32, 'Customer attempts to change paymentMethod', 
     updateDoc(doc(aliceDb, 'orders', 'ord_round1_pending'), { paymentMethod: 'crypto' })
   );
 
-  // 30. Customer changes restaurantId
-  await testAssertFails(30, 'Customer attempts to change restaurantId', 
+  // 33. Customer changes restaurantId
+  await testAssertFails(33, 'Customer attempts to change restaurantId', 
     updateDoc(doc(aliceDb, 'orders', 'ord_round1_pending'), { restaurantId: 'rest_other' })
   );
 
-  // 31. Customer changes courierId
-  await testAssertFails(31, 'Customer attempts to change courierId', 
+  // 34. Customer changes courierId
+  await testAssertFails(34, 'Customer attempts to change courierId', 
     updateDoc(doc(aliceDb, 'orders', 'ord_round1_pending'), { courierId: 'courier_fake' })
   );
 
-  // 32. Customer changes userId
-  await testAssertFails(32, 'Customer attempts to change userId to steal/reassign order', 
+  // 35. Customer changes userId
+  await testAssertFails(35, 'Customer attempts to change userId to steal/reassign order', 
     updateDoc(doc(aliceDb, 'orders', 'ord_round1_pending'), { userId: 'cust_bob' })
   );
 
-  // 33. Customer invalid state transition
-  await testAssertFails(33, 'Customer performs invalid transition payment_pending -> delivered', 
+  // 36. Customer invalid state transition
+  await testAssertFails(36, 'Customer performs invalid transition payment_pending -> delivered', 
     updateDoc(doc(aliceDb, 'orders', 'ord_round1_pending'), { status: 'delivered' })
   );
 
-  // 34. Unauthorized user modifies Alice\'s order
-  await testAssertFails(34, 'Unauthorized user (Bob) attempts to cancel Alice order', 
+  // 37. Unauthorized user modifies Alice\'s order
+  await testAssertFails(37, 'Unauthorized user (Bob) attempts to cancel Alice order', 
     updateDoc(doc(bobDb, 'orders', 'ord_round1_pending'), { status: 'cancelled' })
   );
 
-  // 35. Anonymous user modifies an order
-  await testAssertFails(35, 'Anonymous unauthenticated user attempts to modify an order', 
+  // 38. Anonymous user modifies an order
+  await testAssertFails(38, 'Anonymous unauthenticated user attempts to modify an order', 
     updateDoc(doc(unauthDb, 'orders', 'ord_round1_pending'), { status: 'cancelled' })
   );
 
-  // 36. Restaurant staff modifies protected financial fields
-  await testAssertFails(36, 'Restaurant staff modifies protected total during preparation', 
+  // 39. Restaurant staff modifies protected financial fields
+  await testAssertFails(39, 'Restaurant staff modifies protected total during preparation', 
     updateDoc(doc(samDb, 'orders', 'ord_round1_accepted'), {
       status: 'preparing',
       total: 999.00,
     })
   );
 
-  // 37. Courier modifies protected financial fields
-  await testAssertFails(37, 'Courier modifies protected total during delivery', 
+  // 40. Courier modifies protected financial fields
+  await testAssertFails(40, 'Courier modifies protected total during delivery', 
     updateDoc(doc(daveDb, 'orders', 'ord_round1_ready'), {
       status: 'out_for_delivery',
       total: 999.00,
     })
   );
 
-  // 38. Customer legitimate cancellation
-  await testAssertSucceeds(38, 'Customer performs legitimate permitted cancellation from payment_pending', 
+  // 41. Customer legitimate cancellation
+  await testAssertSucceeds(41, 'Customer performs legitimate permitted cancellation from payment_pending', 
     updateDoc(doc(aliceDb, 'orders', 'ord_round1_pending'), {
       status: 'cancelled',
       updatedAt: '2026-08-29T10:05:00Z',
     })
   );
 
-  // 39. Customer legitimately updates ratings
-  await testAssertSucceeds(39, 'Customer updates rating fields on delivered order', 
+  // 42. Customer legitimately updates ratings
+  await testAssertSucceeds(42, 'Customer updates rating fields on delivered order', 
     updateDoc(doc(aliceDb, 'orders', 'ord_round1_delivered'), {
       ratingSubmitted: {
         foodRating: 5,
@@ -600,8 +632,8 @@ export async function runRealFirestoreRulesTests() {
     })
   );
 
-  // 40. Admin performs legitimate administrative order transition
-  await testAssertSucceeds(40, 'Admin performs legitimately permitted administrative operation', 
+  // 43. Admin performs legitimate administrative order transition
+  await testAssertSucceeds(43, 'Admin performs legitimately permitted administrative operation', 
     updateDoc(doc(adminDb, 'orders', 'ord_round1_paid'), {
       status: 'accepted',
       updatedAt: '2026-08-29T10:05:00Z',
