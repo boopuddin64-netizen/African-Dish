@@ -3,6 +3,7 @@
  */
 import { runRealFirestoreRulesTests } from './firestoreRulesReal.test';
 import { runOrderIntegrityTests } from './orderIntegrity.test';
+import { runStaffAssignmentAuthorizationTests } from './staffAuthorization.test';
 
 async function main() {
   console.log('Running African-Dish Real Firestore Security and Integrity Test Suite...\n');
@@ -10,6 +11,7 @@ async function main() {
     runOrderIntegrityTests();
     console.log('\n');
     await runRealFirestoreRulesTests();
+    await runStaffAssignmentAuthorizationTests();
     console.log('\n🎉 ALL REAL TESTS PASSED SUCCESSFULLY (0 FAILURES)');
     process.exit(0);
   } catch (error) {
