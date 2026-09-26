@@ -20,7 +20,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return userExists() && 
+      return userExists() &&
         (getUserData().get('role', '') == 'admin' || getUserData().get('isAdmin', false) == true);
     }
 
@@ -68,20 +68,22 @@ service cloud.firestore {
     // --- Users Collection ---
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      
+
       allow create: if isOwner(userId) && (
-        !('role' in request.resource.data) || 
-        request.resource.data.role == 'customer' || 
+        !('role' in request.resource.data) ||
+        request.resource.data.role == 'customer' ||
         isAdmin()
       ) && (
         !('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false || isAdmin()
       );
 
       allow update: if (isOwner(userId) && (
-        // Ensure user cannot self-promote to admin or change role/verification
+        // Ensure users cannot self-promote or change privileged verification fields.
         (!('role' in request.resource.data) || request.resource.data.get('role', '') == resource.data.get('role', '')) &&
         (!('isAdmin' in request.resource.data) || request.resource.data.get('isAdmin', false) == resource.data.get('isAdmin', false)) &&
-        (!('verified' in request.resource.data) || request.resource.data.get('verified', false) == resource.data.get('verified', false))
+        (!('verified' in request.resource.data) || request.resource.data.get('verified', false) == resource.data.get('verified', false)) &&
+        // Restaurant assignment is authorization data: only an admin may change it.
+        request.resource.data.get('kitchenStaff', {}).get('assignedRestaurantId', '') == resource.data.get('kitchenStaff', {}).get('assignedRestaurantId', '')
       )) || isAdmin();
 
       allow delete: if isAdmin();
@@ -102,7 +104,7 @@ service cloud.firestore {
         (
           resource.data.get('ownerId', '') == request.auth.uid &&
           (!('ownerId' in request.resource.data) || request.resource.data.ownerId == resource.data.get('ownerId', ''))
-        ) || 
+        ) ||
         isAdmin()
       );
 
@@ -124,7 +126,7 @@ service cloud.firestore {
         (
           isRestaurantAuthorized(resource.data.restaurantId) &&
           (!('restaurantId' in request.resource.data) || request.resource.data.restaurantId == resource.data.restaurantId)
-        ) || 
+        ) ||
         isAdmin()
       );
 
@@ -153,7 +155,7 @@ service cloud.firestore {
       );
 
       // Create: Customer can create their own order with valid initial status
-      allow create: if isAuthenticated() && 
+      allow create: if isAuthenticated() &&
         request.resource.data.userId == request.auth.uid &&
         (request.resource.data.status in ['cart', 'checkout', 'payment_pending']) &&
         (request.resource.data.paymentStatus in ['pending', 'unpaid']);
