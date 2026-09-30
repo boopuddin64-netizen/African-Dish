@@ -1,6 +1,6 @@
 export type Currency = 'NGN' | 'GBP';
 
-export type UserRole = 'customer' | 'restaurant_staff' | 'courier';
+export type UserRole = 'customer' | 'restaurant_staff' | 'courier' | 'admin';
 
 export type ThemeMode = 'light' | 'dark';
 

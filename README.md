@@ -16,7 +16,8 @@ distance, price) and a low-friction checkout.
 | `admin` | Read/override any order, approve role requests, verify restaurants. Admins are created out-of-band (see below). |
 
 Users always sign up as `customer`. Upgrading to `restaurant_staff` / `courier` is done by submitting a **role request**
-which an admin approves (Firestore rules forbid self-promotion). A clearly flagged *demo-only* role switcher exists for
+(`roleRequests/{uid}_{role}`) which an admin approves in the Admin console (a rules-enforced batch write sets `users/{uid}.role`
+and links staff to their restaurant; Firestore rules forbid self-promotion). Admins can also verify newly created restaurants. A clearly flagged *demo-only* role switcher exists for
 local exploration and only changes local UI state.
 
 ## Getting started
@@ -60,11 +61,10 @@ Firestore emulator. The suite contains:
     Admin SDK (which bypasses rules), moves the order `payment_pending → paid → restaurant_pending`.
   - `simulatePayment` (callable) – **development only**; refuses to run unless `FUNCTIONS_EMULATOR=true` or
     `ALLOW_PAYMENT_SIMULATION=true`.
-  - `approveRoleRequest` (callable, admin only) – grants a requested role.
   Rules can only check *shape* (field allowlist, non-negative numbers, initial status); authoritative pricing is done by the function.
 - **Secrets:** set `PAYSTACK_SECRET_KEY` via `firebase functions:secrets:set PAYSTACK_SECRET_KEY` (never commit it).
 - **Creating the first admin:** set `role: 'admin'` on `users/{uid}` via the Firebase console or the Admin SDK.
-- **Demo seed data:** `seedFirestoreInitialData` only runs for admins (or against the emulator) and gives demo restaurants an `ownerId`.
+- **Demo seed data:** `seedFirestoreInitialData` only runs for signed-in admins and gives demo restaurants an `ownerId` and `verified` flags.
 
 ### Functions development
 

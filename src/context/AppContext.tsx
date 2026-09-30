@@ -63,11 +63,14 @@ import { AppNotification, NotificationType, notify, subscribeNotifications } fro
 import { generateId } from '../lib/ids';
 import { logRecommendationEvent } from '../services/analyticsService';
 import { MAX_SAVED_LOCATIONS } from '../services/locationService';
+import { submitRoleRequest, RequestableRole } from '../services/roleService';
+
+export type AppView = 'home' | 'discovery' | 'merchant' | 'courier' | 'profile' | 'prd' | 'admin';
 
 interface AppContextType {
   // Navigation & Views
-  currentView: 'home' | 'discovery' | 'merchant' | 'courier' | 'profile' | 'prd';
-  setCurrentView: (view: 'home' | 'discovery' | 'merchant' | 'courier' | 'profile' | 'prd') => void;
+  currentView: AppView;
+  setCurrentView: (view: AppView) => void;
   
   // Locations
   savedLocations: SavedLocation[];
@@ -95,7 +98,15 @@ interface AppContextType {
 
   // Profile & Preferences & Roles
   userProfile: UserProfile;
+  /** True when a real Firebase Auth user is signed in (false = local demo/guest session). */
+  isSignedIn: boolean;
+  /**
+   * DEMO-ONLY workspace switcher. For guests it switches the local view; for signed-in users it can only switch to a
+   * role the server already granted (or back to the customer view). It never writes `role` to Firestore.
+   */
   setUserRole: (role: UserRole, options?: { navigate?: boolean }) => void;
+  /** Files a roleRequests document; an admin must approve before the role takes effect. */
+  requestRole: (role: RequestableRole, opts?: { restaurantId?: string; note?: string }) => Promise<boolean>;
   theme: ThemeMode;
   toggleTheme: () => void;
   updateUserProfile: (profile: Partial<UserProfile>) => void;
@@ -198,7 +209,12 @@ function orderErrorMessage(err: unknown): string {
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Navigation
-  const [currentView, setCurrentView] = useState<'home' | 'discovery' | 'merchant' | 'courier' | 'profile' | 'prd'>('home');
+  const [currentView, setCurrentView] = useState<AppView>('home');
+
+  // Auth state: true once a real Firebase user is signed in
+  const [isSignedIn, setIsSignedIn] = useState<boolean>(false);
+  // Role granted by the server (users/{uid}.role); userProfile.role may differ only for the local demo/view switch
+  const [grantedRole, setGrantedRole] = useState<UserRole>('customer');
 
   // Loading state
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
@@ -283,12 +299,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       // Auth Sync
       unsubscribeAuth = subscribeToAuthChanges((profile) => {
+        setIsSignedIn(Boolean(profile));
         if (profile) {
+          setGrantedRole(profile.role);
+          const assigned = profile.kitchenStaff?.assignedRestaurantId;
+          if (profile.role === 'restaurant_staff' && assigned) setActiveMerchantRestaurantId(assigned);
           setUserProfile(profile);
           if (profile.theme) setTheme(profile.theme);
           // Demo data is seeded by admins only (Firestore rules); a no-op for everyone else.
           void seedFirestoreInitialData({ uid: profile.id, role: profile.role });
         } else {
+          setGrantedRole('customer');
           setUserProfile(INITIAL_USER_PROFILE);
         }
       });
@@ -367,26 +388,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     recordTap('Toggled dark/light theme');
   };
 
-  // Role Switcher
+  // Role Switcher (DEMO-ONLY, local view state; never persists `role`).
+  // Firestore rules reject self-service role writes, so real upgrades go through requestRole() + admin approval.
   const setUserRole = (newRole: UserRole, options?: { navigate?: boolean }) => {
+    if (isSignedIn && newRole !== 'customer' && newRole !== grantedRole) {
+      notify('Your account does not have that role. Request it from your profile and wait for admin approval.', 'warning');
+      return;
+    }
     recordTap(`Switched user role to ${newRole}`);
-    setUserProfile(prev => {
-      const updated = { ...prev, role: newRole };
-      if (userProfile.id && userProfile.id !== 'guest_user') {
-        updateFirebaseUserProfile(userProfile.id, { role: newRole });
-      }
-      return updated;
-    });
+    setUserProfile(prev => ({ ...prev, role: newRole }));
     if (options?.navigate !== false) {
       if (newRole === 'restaurant_staff') {
         setCurrentView('merchant');
       } else if (newRole === 'courier') {
         setCurrentView('courier');
+      } else if (newRole === 'admin') {
+        setCurrentView('admin');
       } else if (newRole === 'customer') {
-        if (currentView === 'merchant' || currentView === 'courier') {
+        if (currentView === 'merchant' || currentView === 'courier' || currentView === 'admin') {
           setCurrentView('home');
         }
       }
+    }
+  };
+
+  const requestRole = async (role: RequestableRole, opts?: { restaurantId?: string; note?: string }): Promise<boolean> => {
+    if (!isSignedIn) {
+      notify('Sign in to request a role. Demo sessions cannot hold real roles.', 'warning');
+      return false;
+    }
+    try {
+      await submitRoleRequest(role, opts);
+      notify('Request sent. An admin will review it shortly.', 'success');
+      return true;
+    } catch (err) {
+      notify((err as { message?: string })?.message || 'Could not send your request.', 'error');
+      return false;
     }
   };
 
@@ -991,7 +1028,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         weakMatchWarning,
         totalEligibleRecommendations,
         userProfile,
+        isSignedIn,
         setUserRole,
+        requestRole,
         theme,
         toggleTheme,
         updateUserProfile,

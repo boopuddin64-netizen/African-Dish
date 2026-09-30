@@ -7,6 +7,7 @@ import { DiscoveryMode } from './components/DiscoveryMode';
 import { ProfilePage } from './components/ProfilePage';
 import { MerchantDashboard } from './components/MerchantDashboard';
 import { CourierDashboard } from './components/CourierDashboard';
+import { AdminDashboard } from './components/AdminDashboard';
 import { PrdBlueprintModal } from './components/PrdBlueprintModal';
 import { MealDetailModal } from './components/MealDetailModal';
 import { CartDrawer } from './components/CartDrawer';
@@ -53,6 +54,7 @@ const MainContent: React.FC = () => {
             {currentView === 'profile' && <ProfilePage />}
             {currentView === 'merchant' && <MerchantDashboard />}
             {currentView === 'courier' && <CourierDashboard />}
+            {currentView === 'admin' && <AdminDashboard />}
             {currentView === 'prd' && <PrdBlueprintModal />}
           </motion.div>
         </AnimatePresence>
