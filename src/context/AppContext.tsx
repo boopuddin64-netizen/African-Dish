@@ -234,14 +234,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // --- Seed Firestore & Subscribe Realtime ---
   useEffect(() => {
-    let unsubscribeAuth: () => void;
-    let unsubscribeRest: () => void;
-    let unsubscribeMeals: () => void;
-    let unsubscribeOrders: () => void;
+    let cancelled = false;
+    let unsubscribeAuth: (() => void) | undefined;
+    let unsubscribeRest: (() => void) | undefined;
+    let unsubscribeMeals: (() => void) | undefined;
 
     async function initFirebaseSync() {
       setIsLoadingData(true);
       await seedFirestoreInitialData();
+      if (cancelled) return;
 
       // Auth Sync
       unsubscribeAuth = subscribeToAuthChanges((profile) => {
@@ -268,11 +269,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     initFirebaseSync();
 
+    // Orders are subscribed in a separate effect keyed on the signed-in user.
     return () => {
-      if (unsubscribeAuth) unsubscribeAuth();
-      if (unsubscribeRest) unsubscribeRest();
-      if (unsubscribeMeals) unsubscribeMeals();
-      if (unsubscribeOrders) unsubscribeOrders();
+      cancelled = true;
+      unsubscribeAuth?.();
+      unsubscribeRest?.();
+      unsubscribeMeals?.();
     };
   }, []);
 
@@ -415,9 +417,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // Recommendations Computation
-  const { recommendations, totalEligibleRecommendations, weakMatchWarning } = useMemo(() => {
+  const { recommendations, totalEligible: totalEligibleRecommendations, weakMatchWarning } = useMemo(() => {
     if (!currentLocation) {
-      return { recommendations: [], totalEligibleRecommendations: 0, weakMatchWarning: 'No location selected' };
+      return { recommendations: [], totalEligible: 0, weakMatchWarning: 'No location selected' };
     }
     return computeRecommendations({
       meals: allMeals,

@@ -72,10 +72,11 @@ export const CourierDashboard: React.FC = () => {
 
   // Active in-flight orders that courier can fulfill
   const activeDeliveryOrders = orders.filter(
-    o => o.status === 'out_for_delivery' || o.status === 'preparing' || o.status === 'ready_for_pickup'
+    o => o.status === 'out_for_delivery' || o.status === 'preparing' || o.status === 'ready'
   );
 
   const [selectedChatOrderId, setSelectedChatOrderId] = useState<string | null>(null);
+  const selectedChatOrder = orders.find(o => o.id === selectedChatOrderId) || null;
   const [selectedOrderTab, setSelectedOrderTab] = useState<'active' | 'available' | 'completed'>('active');
 
   // Simulated available dispatches in the area
@@ -379,7 +380,7 @@ export const CourierDashboard: React.FC = () => {
                         <span>1. Kitchen Pickup Point</span>
                       </div>
                       <p className="font-extrabold text-sm text-[#241A17] dark:text-stone-100">
-                        {order.items[0]?.restaurantName || 'Assigned Restaurant'}
+                        {order.items[0]?.restaurant.name || order.restaurantName || 'Assigned Restaurant'}
                       </p>
                       <p className="text-xs text-[#807872] dark:text-stone-400">
                         14 Forces Avenue, Old GRA, Port Harcourt
@@ -437,7 +438,7 @@ export const CourierDashboard: React.FC = () => {
                     <div className="space-y-1.5">
                       {order.items.map((item, idx) => (
                         <div key={idx} className="flex items-center justify-between text-xs text-[#241A17] dark:text-stone-200">
-                          <span className="font-semibold">{item.quantity}x {item.mealName}</span>
+                          <span className="font-semibold">{item.quantity}x {item.meal.name}</span>
                           <span className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                             <ShieldCheck className="w-3 h-3" /> Sealed in Thermal Bag
                           </span>
@@ -592,9 +593,10 @@ export const CourierDashboard: React.FC = () => {
       )}
 
       {/* Live Courier Chat Modal */}
-      {selectedChatOrderId && (
+      {selectedChatOrder && (
         <LiveCourierChatModal
-          orderId={selectedChatOrderId}
+          order={selectedChatOrder}
+          isOpen
           onClose={() => setSelectedChatOrderId(null)}
         />
       )}

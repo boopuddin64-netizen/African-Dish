@@ -16,7 +16,7 @@ import {
   Check,
   RotateCcw
 } from 'lucide-react';
-import { ScoredRecommendation } from '../types';
+import { ScoredRecommendation, RejectionReason } from '../types';
 
 export const HomeRecommendations: React.FC = () => {
   const {
@@ -43,12 +43,13 @@ export const HomeRecommendations: React.FC = () => {
   const secondaryRecs = recommendations.slice(1, 3);
   const weakMatchWarning = recommendations.length > 0 && recommendations[0].totalScore < 35;
 
-  const rejectionReasons = [
+  const rejectionReasons: RejectionReason[] = [
     'Too expensive',
     'Too spicy',
-    'Too far / long ETA',
-    'Not craving this cuisine',
-    'Ate this recently'
+    'Too far',
+    'Not hungry for this',
+    'Had it recently',
+    "Don't like this"
   ];
 
   const greeting = mealPeriod === 'breakfast' 
@@ -79,7 +80,7 @@ export const HomeRecommendations: React.FC = () => {
     setTimeout(() => setAddedAnimationMealId(null), 1200);
   };
 
-  const handleRejection = (mealId: string, reason: string) => {
+  const handleRejection = (mealId: string, reason: RejectionReason) => {
     recordTap(`Rejected meal ${mealId} with reason: ${reason}`);
     rejectMeal(mealId, reason);
     setActiveRejectMealId(null);
@@ -522,7 +523,7 @@ export const HomeRecommendations: React.FC = () => {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        rejectMeal(rec.meal.id, 'Not interested');
+                        rejectMeal(rec.meal.id, 'Other');
                       }}
                       className="p-1.5 rounded-full hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 text-[#807872] dark:text-stone-400 transition-colors"
                       title="Not interested"

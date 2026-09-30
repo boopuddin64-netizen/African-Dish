@@ -161,7 +161,7 @@ export interface UserPreferences {
 
 export interface BehavioralHistory {
   orderedMealIds: { mealId: string; count: number; lastOrderedAt: string }[];
-  rejectedMealIds: { mealId: string; reason: string; timestamp: string }[];
+  rejectedMealIds: { mealId: string; reason: RejectionReason; timestamp: string }[];
   ratedMeals: { mealId: string; rating: number; feedback: string[]; timestamp: string }[];
   rememberedCustomizations: Record<string, string[]>; // mealId -> list of customization option IDs
 }

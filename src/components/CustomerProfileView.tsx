@@ -782,11 +782,11 @@ export const CustomerProfileView: React.FC = () => {
                       <div key={idx} className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-[#C85C43]">{item.quantity}x</span>
-                          <span className="font-semibold text-[#241A17] dark:text-stone-200">{item.mealName}</span>
-                          <span className="text-[11px] text-[#807872] dark:text-stone-400">({item.restaurantName})</span>
+                          <span className="font-semibold text-[#241A17] dark:text-stone-200">{item.meal.name}</span>
+                          <span className="text-[11px] text-[#807872] dark:text-stone-400">({item.restaurant.name})</span>
                         </div>
                         <span className="font-medium text-[#241A17] dark:text-stone-300">
-                          {order.currency === 'GBP' ? '£' : '₦'}{(item.unitPrice * item.quantity).toLocaleString()}
+                          {order.currency === 'GBP' ? '£' : '₦'}{(item.itemPrice * item.quantity).toLocaleString()}
                         </span>
                       </div>
                     ))}
@@ -795,10 +795,10 @@ export const CustomerProfileView: React.FC = () => {
                   {/* Rating / Actions */}
                   <div className="flex items-center justify-between pt-3 border-t border-[#EAE4DC] dark:border-stone-800">
                     <div className="flex items-center gap-1.5 text-xs text-[#807872] dark:text-stone-400">
-                      {order.rating ? (
+                      {order.ratingSubmitted ? (
                         <div className="flex items-center gap-1 text-amber-500 font-bold">
                           <Star className="w-3.5 h-3.5 fill-amber-400" />
-                          <span>Rated {order.rating.foodRating}/5</span>
+                          <span>Rated {order.ratingSubmitted.foodRating}/5</span>
                         </div>
                       ) : (
                         <span>Delivered safely with tamper seals intact</span>
