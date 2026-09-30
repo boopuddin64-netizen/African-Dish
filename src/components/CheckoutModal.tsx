@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useEscapeKey } from '../lib/useEscapeKey';
 import { 
   X, 
   MapPin, 
@@ -34,15 +35,19 @@ export const CheckoutModal: React.FC = () => {
   const [selectedPayment, setSelectedPayment] = useState<'card' | 'bank_transfer' | 'apple_pay' | 'cash'>('card');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEscapeKey(isCheckoutOpen, () => setIsCheckoutOpen(false));
   if (!isCheckoutOpen) return null;
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     setIsSubmitting(true);
     recordTap('Submitted Final Order Confirmation');
-    setTimeout(() => {
-      placeOrder(fulfillmentMethod);
+    try {
+      await placeOrder(fulfillmentMethod);
+    } catch {
+      // placeOrder already surfaced a toast explaining what went wrong (guest, validation, server error)
+    } finally {
       setIsSubmitting(false);
-    }, 600);
+    }
   };
 
   const finalTotal = fulfillmentMethod === 'delivery' ? cartTotal : (cartSubtotal + cartServiceFee);
@@ -55,6 +60,9 @@ export const CheckoutModal: React.FC = () => {
     >
       <div 
         id="checkout-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Checkout"
         onClick={(e) => e.stopPropagation()}
         className="bg-white dark:bg-[#1E1B18] w-full max-w-xl rounded-3xl overflow-hidden shadow-2xl border border-[#EAE4DC] dark:border-stone-800 flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150"
       >
@@ -74,7 +82,7 @@ export const CheckoutModal: React.FC = () => {
             </div>
           </div>
 
-          <button
+          <button aria-label="Close checkout"
             onClick={() => setIsCheckoutOpen(false)}
             className="w-8 h-8 rounded-full hover:bg-[#FAF7F0] dark:hover:bg-stone-800 flex items-center justify-center text-[#807872] dark:text-stone-400 transition-colors"
           >

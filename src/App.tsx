@@ -1,19 +1,27 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/Navbar';
 import { HomeRecommendations } from './components/HomeRecommendations';
-import { DiscoveryMode } from './components/DiscoveryMode';
-import { ProfilePage } from './components/ProfilePage';
-import { MerchantDashboard } from './components/MerchantDashboard';
-import { CourierDashboard } from './components/CourierDashboard';
-import { PrdBlueprintModal } from './components/PrdBlueprintModal';
-import { MealDetailModal } from './components/MealDetailModal';
-import { CartDrawer } from './components/CartDrawer';
-import { CheckoutModal } from './components/CheckoutModal';
-import { OrderTrackingModal } from './components/OrderTrackingModal';
-import { PreferenceSafetyModal } from './components/PreferenceSafetyModal';
-import { RestaurantDetailsModal } from './components/RestaurantDetailsModal';
+import { Toast } from './components/Toast';
+import { ErrorBoundary } from './components/ErrorBoundary';
+
+const DiscoveryMode = lazy(() => import('./components/DiscoveryMode').then(m => ({ default: m.DiscoveryMode })));
+const ProfilePage = lazy(() => import('./components/ProfilePage').then(m => ({ default: m.ProfilePage })));
+const MerchantDashboard = lazy(() => import('./components/MerchantDashboard').then(m => ({ default: m.MerchantDashboard })));
+const CourierDashboard = lazy(() => import('./components/CourierDashboard').then(m => ({ default: m.CourierDashboard })));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const PrdBlueprintModal = lazy(() => import('./components/PrdBlueprintModal').then(m => ({ default: m.PrdBlueprintModal })));
+const MealDetailModal = lazy(() => import('./components/MealDetailModal').then(m => ({ default: m.MealDetailModal })));
+const CartDrawer = lazy(() => import('./components/CartDrawer').then(m => ({ default: m.CartDrawer })));
+const CheckoutModal = lazy(() => import('./components/CheckoutModal').then(m => ({ default: m.CheckoutModal })));
+const OrderTrackingModal = lazy(() => import('./components/OrderTrackingModal').then(m => ({ default: m.OrderTrackingModal })));
+const PreferenceSafetyModal = lazy(() => import('./components/PreferenceSafetyModal').then(m => ({ default: m.PreferenceSafetyModal })));
+const RestaurantDetailsModal = lazy(() => import('./components/RestaurantDetailsModal').then(m => ({ default: m.RestaurantDetailsModal })));
+
+const ViewFallback: React.FC = () => (
+  <div role="status" aria-live="polite" className="py-20 text-center text-xs text-[#807872] dark:text-stone-400">Loading…</div>
+);
 
 const MainContent: React.FC = () => {
   const { 
@@ -23,7 +31,12 @@ const MainContent: React.FC = () => {
     userProfile,
     isRestaurantDetailsModalOpen,
     selectedRestaurantForDetails,
-    closeRestaurantDetailsModal
+    closeRestaurantDetailsModal,
+    selectedMeal,
+    isCartOpen,
+    isCheckoutOpen,
+    activeOrder,
+    isPreferenceModalOpen
   } = useApp();
 
   const isCustomer = userProfile.role === 'customer';
@@ -46,27 +59,36 @@ const MainContent: React.FC = () => {
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1.0] }}
           >
+            <Suspense fallback={<ViewFallback />}>
             {currentView === 'home' && <HomeRecommendations />}
             {currentView === 'discovery' && <DiscoveryMode />}
             {currentView === 'profile' && <ProfilePage />}
             {currentView === 'merchant' && <MerchantDashboard />}
             {currentView === 'courier' && <CourierDashboard />}
+            {currentView === 'admin' && <AdminDashboard />}
             {currentView === 'prd' && <PrdBlueprintModal />}
+            </Suspense>
           </motion.div>
         </AnimatePresence>
       </main>
 
-      {/* Global Modals & Drawers */}
-      <MealDetailModal />
-      <CartDrawer />
-      <CheckoutModal />
-      <OrderTrackingModal />
-      <PreferenceSafetyModal />
-      <RestaurantDetailsModal
-        isOpen={isRestaurantDetailsModalOpen}
-        restaurant={selectedRestaurantForDetails}
-        onClose={closeRestaurantDetailsModal}
-      />
+      <Toast />
+
+      {/* Global Modals & Drawers: code-split; each chunk is fetched the first time its modal is opened */}
+      <Suspense fallback={null}>
+        {selectedMeal && <MealDetailModal />}
+        {isCartOpen && <CartDrawer />}
+        {isCheckoutOpen && <CheckoutModal />}
+        {activeOrder && <OrderTrackingModal />}
+        {isPreferenceModalOpen && <PreferenceSafetyModal />}
+        {isRestaurantDetailsModalOpen && (
+          <RestaurantDetailsModal
+            isOpen={isRestaurantDetailsModalOpen}
+            restaurant={selectedRestaurantForDetails}
+            onClose={closeRestaurantDetailsModal}
+          />
+        )}
+      </Suspense>
 
       {/* Product Footer */}
       <footer className="border-t border-[#EAE4DC] dark:border-stone-800 bg-white/70 dark:bg-[#181512]/70 backdrop-blur-xs py-8 mt-12 text-xs text-[#807872] dark:text-stone-400">
@@ -141,8 +163,10 @@ const MainContent: React.FC = () => {
 
 export default function App() {
   return (
-    <AppProvider>
-      <MainContent />
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <MainContent />
+      </AppProvider>
+    </ErrorBoundary>
   );
 }

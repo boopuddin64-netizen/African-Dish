@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { useEscapeKey } from '../lib/useEscapeKey';
 import { 
   X, 
   CheckCircle2, 
@@ -28,7 +29,6 @@ export const OrderTrackingModal: React.FC = () => {
     currentLocation
   } = useApp();
 
-  const [simulatedStatus, setSimulatedStatus] = useState<OrderStatus>('confirmed');
   const [foodRating, setFoodRating] = useState(5);
   const [restaurantRating, setRestaurantRating] = useState(5);
   const [deliveryRating, setDeliveryRating] = useState(5);
@@ -36,26 +36,12 @@ export const OrderTrackingModal: React.FC = () => {
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
 
+  // Reset the local feedback form whenever a different order is opened
   useEffect(() => {
-    if (activeOrder) {
-      setSimulatedStatus('confirmed');
-      setFeedbackSubmitted(false);
-
-      // Simulation steps for live tracking demonstration
-      const t1 = setTimeout(() => setSimulatedStatus('preparing'), 3000);
-      const t2 = setTimeout(() => setSimulatedStatus('ready'), 7000);
-      const t3 = setTimeout(() => setSimulatedStatus('on_the_way'), 11000);
-      const t4 = setTimeout(() => setSimulatedStatus('delivered'), 16000);
-
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-        clearTimeout(t3);
-        clearTimeout(t4);
-      };
-    }
+    setFeedbackSubmitted(false);
   }, [activeOrder?.id]);
 
+  useEscapeKey(Boolean(activeOrder) && !isChatOpen, () => setActiveOrder(null));
   if (!activeOrder) return null;
 
   const quickFeedbackOptions = [
@@ -77,24 +63,25 @@ export const OrderTrackingModal: React.FC = () => {
     );
   };
 
-  const handleSubmitFeedback = () => {
-    submitOrderRating(activeOrder.id, foodRating, restaurantRating, deliveryRating, selectedTags);
+  const handleSubmitFeedback = async () => {
+    await submitOrderRating(activeOrder.id, foodRating, restaurantRating, deliveryRating, selectedTags);
     setFeedbackSubmitted(true);
   };
 
-  const steps: { key: OrderStatus; label: string; icon: any; time: string }[] = [
-    { key: 'confirmed', label: 'Order Confirmed', icon: CheckCircle2, time: '1 min ago' },
-    { key: 'preparing', label: 'Kitchen Preparing Food', icon: ChefHat, time: 'In progress' },
-    { key: 'ready', label: 'Food Packed & Ready', icon: PackageCheck, time: 'Next' },
-    { key: 'on_the_way', label: 'Courier on the Way', icon: Bike, time: '15-20 min' },
-    { key: 'delivered', label: 'Delivered Fresh', icon: Sparkles, time: 'Done' }
+  // Real order status (live from Firestore) drives the tracker; nothing here is simulated any more.
+  const liveStatus: OrderStatus = activeOrder.status;
+  const steps: { key: string; statuses: OrderStatus[]; label: string; icon: any; time: string }[] = [
+    { key: 'placed', statuses: ['cart', 'checkout', 'payment_pending', 'payment_failed', 'paid', 'restaurant_pending', 'confirmed'], label: activeOrder.paymentStatus === 'paid' ? 'Paid - awaiting kitchen' : 'Order placed - awaiting payment', icon: CheckCircle2, time: 'Now' },
+    { key: 'accepted', statuses: ['accepted'], label: 'Kitchen Accepted', icon: ChefHat, time: 'Next' },
+    { key: 'preparing', statuses: ['preparing'], label: 'Kitchen Preparing Food', icon: ChefHat, time: 'In progress' },
+    { key: 'ready', statuses: ['ready'], label: 'Food Packed & Ready', icon: PackageCheck, time: 'Next' },
+    { key: 'out_for_delivery', statuses: ['out_for_delivery', 'on_the_way'], label: 'Courier on the Way', icon: Bike, time: '15-20 min' },
+    { key: 'delivered', statuses: ['delivered', 'refunded'], label: 'Delivered Fresh', icon: Sparkles, time: 'Done' }
   ];
-
-  const getCurrentStepIndex = () => {
-    return steps.findIndex(s => s.key === simulatedStatus);
-  };
-
-  const activeIndex = getCurrentStepIndex();
+  const isTerminalFailure = liveStatus === 'cancelled' || liveStatus === 'rejected';
+  const activeIndex = isTerminalFailure ? -1 : steps.findIndex(st => st.statuses.includes(liveStatus));
+  const isDelivered = liveStatus === 'delivered' || liveStatus === 'refunded';
+  const hasRated = Boolean(activeOrder.ratingSubmitted) || feedbackSubmitted;
 
   return (
     <div 
@@ -103,6 +90,9 @@ export const OrderTrackingModal: React.FC = () => {
     >
       <div 
         id="order-tracking-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Order tracking"
         className="bg-white dark:bg-[#1E1B18] w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl border border-[#EAE4DC] dark:border-stone-800 flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150"
       >
         {/* Header */}
@@ -114,11 +104,11 @@ export const OrderTrackingModal: React.FC = () => {
               <span className="text-[#C85C43]">{activeOrder.restaurantName}</span>
             </div>
             <h2 className="text-base sm:text-lg font-extrabold text-[#241A17] dark:text-stone-100 mt-0.5">
-              {simulatedStatus === 'delivered' ? '🎉 Order Delivered!' : 'Live Order Tracking'}
+              {isDelivered ? '🎉 Order Delivered!' : isTerminalFailure ? `Order ${liveStatus}` : 'Live Order Tracking'}
             </h2>
           </div>
 
-          <button
+          <button aria-label="Close order tracking"
             onClick={() => setActiveOrder(null)}
             className="w-8 h-8 rounded-full hover:bg-white dark:hover:bg-stone-800 flex items-center justify-center text-[#807872] dark:text-stone-400"
           >
@@ -233,7 +223,7 @@ export const OrderTrackingModal: React.FC = () => {
           </div>
 
           {/* 3-Question Micro Rating & Feedback (Section 42 & 43) */}
-          {simulatedStatus === 'delivered' && (
+          {isDelivered && (
             <div className="bg-[#FAF7F0] dark:bg-stone-900 p-5 rounded-2xl border border-[#C9A45C]/40 dark:border-[#C9A45C]/30 space-y-4">
               <div>
                 <div className="flex items-center gap-1.5 text-xs font-black text-[#8B6B23] dark:text-amber-300 uppercase">
@@ -245,7 +235,7 @@ export const OrderTrackingModal: React.FC = () => {
                 </p>
               </div>
 
-              {!feedbackSubmitted ? (
+              {!hasRated ? (
                 <div className="space-y-4">
                   {/* Food Rating */}
                   <div>
@@ -352,12 +342,11 @@ export const OrderTrackingModal: React.FC = () => {
 
         {/* Footer */}
         <div className="p-4 border-t border-[#EAE4DC] dark:border-stone-800 bg-[#FAF7F0] dark:bg-[#181512] flex items-center justify-between">
-          {simulatedStatus !== 'delivered' && (
+          {!isDelivered && !isTerminalFailure && ['cart','checkout','payment_pending','payment_failed','paid','restaurant_pending','confirmed'].includes(liveStatus) && (
             <button
               onClick={() => {
                 recordTap(`Cancelled order #${activeOrder.orderNumber}`);
                 cancelActiveOrder(activeOrder.id);
-                setActiveOrder(null);
               }}
               className="text-xs text-red-600 hover:text-red-700 font-semibold"
             >

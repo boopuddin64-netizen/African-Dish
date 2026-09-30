@@ -166,7 +166,7 @@ export const KitchenProfileView: React.FC = () => {
             </button>
           )}
 
-          <button
+          <button aria-label="Edit staff details"
             onClick={() => setIsEditingStaff(!isEditingStaff)}
             className="px-3.5 py-2.5 rounded-full border border-[#EAE4DC] dark:border-stone-700 bg-[#FAF7F0] dark:bg-stone-800 text-[#241A17] dark:text-stone-200 text-xs font-bold hover:border-[#C85C43]/50 transition-colors"
           >
@@ -192,10 +192,10 @@ export const KitchenProfileView: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div>
-              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">
+              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="kitchenprofileview-full-name-chef-identity-1">
                 Full Name / Chef Identity
               </label>
-              <input
+              <input id="kitchenprofileview-full-name-chef-identity-1"
                 type="text"
                 value={nameInput}
                 onChange={e => setNameInput(e.target.value)}
@@ -205,10 +205,10 @@ export const KitchenProfileView: React.FC = () => {
             </div>
 
             <div>
-              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">
+              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="kitchenprofileview-job-title-role-2">
                 Job Title & Role
               </label>
-              <input
+              <input id="kitchenprofileview-job-title-role-2"
                 type="text"
                 value={titleInput}
                 onChange={e => setTitleInput(e.target.value)}
@@ -218,10 +218,10 @@ export const KitchenProfileView: React.FC = () => {
             </div>
 
             <div>
-              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">
+              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="kitchenprofileview-primary-kitchen-station-3">
                 Primary Kitchen Station
               </label>
-              <input
+              <input id="kitchenprofileview-primary-kitchen-station-3"
                 type="text"
                 value={stationInput}
                 onChange={e => setStationInput(e.target.value)}
@@ -231,10 +231,10 @@ export const KitchenProfileView: React.FC = () => {
             </div>
 
             <div>
-              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">
+              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="kitchenprofileview-shift-schedule-hours-4">
                 Shift Schedule & Hours
               </label>
-              <input
+              <input id="kitchenprofileview-shift-schedule-hours-4"
                 type="text"
                 value={shiftInput}
                 onChange={e => setShiftInput(e.target.value)}
@@ -244,10 +244,10 @@ export const KitchenProfileView: React.FC = () => {
             </div>
 
             <div>
-              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">
+              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="kitchenprofileview-emergency-contact-name-5">
                 Emergency Contact Name
               </label>
-              <input
+              <input id="kitchenprofileview-emergency-contact-name-5"
                 type="text"
                 value={emergencyName}
                 onChange={e => setEmergencyName(e.target.value)}
@@ -256,10 +256,10 @@ export const KitchenProfileView: React.FC = () => {
             </div>
 
             <div>
-              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">
+              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="kitchenprofileview-emergency-contact-phone-6">
                 Emergency Contact Phone
               </label>
-              <input
+              <input id="kitchenprofileview-emergency-contact-phone-6"
                 type="text"
                 value={emergencyPhone}
                 onChange={e => setEmergencyPhone(e.target.value)}

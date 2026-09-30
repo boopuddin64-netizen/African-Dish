@@ -179,7 +179,7 @@ export const CustomerProfileView: React.FC = () => {
       postcodeOrArea: newAddressArea || `${newAddressCity} area`,
       isDefault: newAddressIsDefault,
       currency: newAddressCity === 'Port Harcourt' ? 'NGN' : 'GBP',
-      coordinates: CITY_COORDINATES[newAddressCity] || CITY_COORDINATES['Port Harcourt']
+      coordinates: CITY_COORDINATES[newAddressCity]
     });
     setNewAddressLabel('');
     setNewAddressStreet('');
@@ -495,7 +495,7 @@ export const CustomerProfileView: React.FC = () => {
                   className="px-3 py-1.5 rounded-full bg-[#FAF7F0] dark:bg-stone-900 border border-[#EAE4DC] dark:border-stone-800 text-xs font-semibold text-[#241A17] dark:text-stone-200 flex items-center gap-1.5"
                 >
                   <span>No {item}</span>
-                  <button
+                  <button aria-label="Remove disliked ingredient"
                     onClick={() => removeDislikedIngredient(item)}
                     className="w-4 h-4 rounded-full hover:bg-[#EAE4DC] dark:hover:bg-stone-700 flex items-center justify-center text-[#807872] dark:text-stone-400 hover:text-red-600 transition-colors"
                   >
@@ -688,7 +688,7 @@ export const CustomerProfileView: React.FC = () => {
                         </button>
                       )}
                       {savedLocations.length > 1 && (
-                        <button
+                        <button aria-label="Delete saved address"
                           onClick={() => deleteSavedLocation(loc.id)}
                           className="p-1 text-[#807872] hover:text-red-600 transition-colors"
                         >
@@ -782,11 +782,11 @@ export const CustomerProfileView: React.FC = () => {
                       <div key={idx} className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-[#C85C43]">{item.quantity}x</span>
-                          <span className="font-semibold text-[#241A17] dark:text-stone-200">{item.mealName}</span>
-                          <span className="text-[11px] text-[#807872] dark:text-stone-400">({item.restaurantName})</span>
+                          <span className="font-semibold text-[#241A17] dark:text-stone-200">{item.meal.name}</span>
+                          <span className="text-[11px] text-[#807872] dark:text-stone-400">({item.restaurant.name})</span>
                         </div>
                         <span className="font-medium text-[#241A17] dark:text-stone-300">
-                          {order.currency === 'GBP' ? '£' : '₦'}{(item.unitPrice * item.quantity).toLocaleString()}
+                          {order.currency === 'GBP' ? '£' : '₦'}{(item.itemPrice * item.quantity).toLocaleString()}
                         </span>
                       </div>
                     ))}
@@ -795,10 +795,10 @@ export const CustomerProfileView: React.FC = () => {
                   {/* Rating / Actions */}
                   <div className="flex items-center justify-between pt-3 border-t border-[#EAE4DC] dark:border-stone-800">
                     <div className="flex items-center gap-1.5 text-xs text-[#807872] dark:text-stone-400">
-                      {order.rating ? (
+                      {order.ratingSubmitted ? (
                         <div className="flex items-center gap-1 text-amber-500 font-bold">
                           <Star className="w-3.5 h-3.5 fill-amber-400" />
-                          <span>Rated {order.rating.foodRating}/5</span>
+                          <span>Rated {order.ratingSubmitted.foodRating}/5</span>
                         </div>
                       ) : (
                         <span>Delivered safely with tamper seals intact</span>
@@ -873,7 +873,7 @@ export const CustomerProfileView: React.FC = () => {
                   </div>
                 </div>
 
-                <button
+                <button aria-label="Remove saved card"
                   onClick={() => setSavedCards(prev => prev.filter(c => c.id !== card.id))}
                   className="p-1 text-[#807872] hover:text-red-600 transition-colors"
                 >
@@ -945,20 +945,20 @@ export const CustomerProfileView: React.FC = () => {
       {/* Edit Profile Modal */}
       {isEditProfileModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#1E1B18] rounded-3xl max-w-md w-full border border-[#EAE4DC] dark:border-stone-800 shadow-2xl overflow-hidden">
+          <div role="dialog" aria-modal="true" aria-label="Edit profile" className="bg-white dark:bg-[#1E1B18] rounded-3xl max-w-md w-full border border-[#EAE4DC] dark:border-stone-800 shadow-2xl overflow-hidden">
             <div className="p-5 border-b border-[#EAE4DC] dark:border-stone-800 flex items-center justify-between">
               <h3 className="font-extrabold text-sm text-[#241A17] dark:text-stone-100">
                 Edit Personal Information
               </h3>
-              <button onClick={() => setIsEditProfileModalOpen(false)}>
+              <button aria-label="Close edit profile dialog" onClick={() => setIsEditProfileModalOpen(false)}>
                 <X className="w-4 h-4 text-[#807872]" />
               </button>
             </div>
 
             <form onSubmit={handleSaveProfile} className="p-5 space-y-4 text-xs">
               <div>
-                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Full Name</label>
-                <input
+                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="customerprofileview-full-name-1">Full Name</label>
+                <input id="customerprofileview-full-name-1"
                   type="text"
                   required
                   value={profileName}
@@ -968,8 +968,8 @@ export const CustomerProfileView: React.FC = () => {
               </div>
 
               <div>
-                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Email Address</label>
-                <input
+                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="customerprofileview-email-address-2">Email Address</label>
+                <input id="customerprofileview-email-address-2"
                   type="email"
                   required
                   value={profileEmail}
@@ -979,8 +979,8 @@ export const CustomerProfileView: React.FC = () => {
               </div>
 
               <div>
-                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Phone Number</label>
-                <input
+                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="customerprofileview-phone-number-3">Phone Number</label>
+                <input id="customerprofileview-phone-number-3"
                   type="tel"
                   required
                   value={profilePhone}
@@ -1012,20 +1012,20 @@ export const CustomerProfileView: React.FC = () => {
       {/* Add Address Modal */}
       {isAddAddressModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#1E1B18] rounded-3xl max-w-md w-full border border-[#EAE4DC] dark:border-stone-800 shadow-2xl overflow-hidden">
+          <div role="dialog" aria-modal="true" aria-label="Add address" className="bg-white dark:bg-[#1E1B18] rounded-3xl max-w-md w-full border border-[#EAE4DC] dark:border-stone-800 shadow-2xl overflow-hidden">
             <div className="p-5 border-b border-[#EAE4DC] dark:border-stone-800 flex items-center justify-between">
               <h3 className="font-extrabold text-sm text-[#241A17] dark:text-stone-100">
                 Add New Delivery Address
               </h3>
-              <button onClick={() => setIsAddAddressModalOpen(false)}>
+              <button aria-label="Close add address dialog" onClick={() => setIsAddAddressModalOpen(false)}>
                 <X className="w-4 h-4 text-[#807872]" />
               </button>
             </div>
 
             <form onSubmit={handleAddAddress} className="p-5 space-y-4 text-xs">
               <div>
-                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Label (e.g. Home, Office, Gym)</label>
-                <input
+                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="customerprofileview-label-e-g-home-office-gy-4">Label (e.g. Home, Office, Gym)</label>
+                <input id="customerprofileview-label-e-g-home-office-gy-4"
                   type="text"
                   required
                   placeholder="e.g. Apartment, Work Hub"
@@ -1036,8 +1036,8 @@ export const CustomerProfileView: React.FC = () => {
               </div>
 
               <div>
-                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">City / Expansion Pilot</label>
-                <select
+                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="customerprofileview-city-expansion-pilot-5">City / Expansion Pilot</label>
+                <select id="customerprofileview-city-expansion-pilot-5"
                   value={newAddressCity}
                   onChange={(e) => setNewAddressCity(e.target.value as any)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-[#EAE4DC] dark:border-stone-700 bg-white dark:bg-stone-900 text-[#241A17] dark:text-stone-100 focus:outline-none focus:border-[#C85C43]"
@@ -1049,8 +1049,8 @@ export const CustomerProfileView: React.FC = () => {
               </div>
 
               <div>
-                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Street Address</label>
-                <input
+                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="customerprofileview-street-address-6">Street Address</label>
+                <input id="customerprofileview-street-address-6"
                   type="text"
                   required
                   placeholder="e.g. Plot 18, Peter Odili Road"
@@ -1061,8 +1061,8 @@ export const CustomerProfileView: React.FC = () => {
               </div>
 
               <div>
-                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Area / Postcode</label>
-                <input
+                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="customerprofileview-area-postcode-7">Area / Postcode</label>
+                <input id="customerprofileview-area-postcode-7"
                   type="text"
                   placeholder="e.g. Trans-Amadi or SE15 4RZ"
                   value={newAddressArea}
@@ -1104,20 +1104,20 @@ export const CustomerProfileView: React.FC = () => {
       {/* Add Card Modal */}
       {isAddCardModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#1E1B18] rounded-3xl max-w-md w-full border border-[#EAE4DC] dark:border-stone-800 shadow-2xl overflow-hidden">
+          <div role="dialog" aria-modal="true" aria-label="Add payment card" className="bg-white dark:bg-[#1E1B18] rounded-3xl max-w-md w-full border border-[#EAE4DC] dark:border-stone-800 shadow-2xl overflow-hidden">
             <div className="p-5 border-b border-[#EAE4DC] dark:border-stone-800 flex items-center justify-between">
               <h3 className="font-extrabold text-sm text-[#241A17] dark:text-stone-100">
                 Add Payment Card
               </h3>
-              <button onClick={() => setIsAddCardModalOpen(false)}>
+              <button aria-label="Close add card dialog" onClick={() => setIsAddCardModalOpen(false)}>
                 <X className="w-4 h-4 text-[#807872]" />
               </button>
             </div>
 
             <form onSubmit={handleAddCard} className="p-5 space-y-4 text-xs">
               <div>
-                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Cardholder Name</label>
-                <input
+                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="customerprofileview-cardholder-name-8">Cardholder Name</label>
+                <input id="customerprofileview-cardholder-name-8"
                   type="text"
                   required
                   placeholder="Name as it appears on card"
@@ -1128,8 +1128,8 @@ export const CustomerProfileView: React.FC = () => {
               </div>
 
               <div>
-                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Card Number</label>
-                <input
+                <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="customerprofileview-card-number-9">Card Number</label>
+                <input id="customerprofileview-card-number-9"
                   type="text"
                   required
                   placeholder="•••• •••• •••• ••••"
@@ -1141,8 +1141,8 @@ export const CustomerProfileView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Expiry Date</label>
-                  <input
+                  <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="customerprofileview-expiry-date-10">Expiry Date</label>
+                  <input id="customerprofileview-expiry-date-10"
                     type="text"
                     required
                     placeholder="MM/YY"
@@ -1152,8 +1152,8 @@ export const CustomerProfileView: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Security Code (CVV)</label>
-                  <input
+                  <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="customerprofileview-security-code-cvv-11">Security Code (CVV)</label>
+                  <input id="customerprofileview-security-code-cvv-11"
                     type="password"
                     required
                     maxLength={4}

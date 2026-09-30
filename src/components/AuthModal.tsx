@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useEscapeKey } from '../lib/useEscapeKey';
 import { X, Mail, Lock, User, LogIn, Sparkles, AlertCircle } from 'lucide-react';
 
 interface AuthModalProps {
@@ -15,6 +16,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEscapeKey(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -56,8 +59,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4" onClick={onClose}>
       <div 
+        role="dialog"
+        aria-modal="true"
+        aria-label={mode === 'login' ? 'Sign in' : 'Create account'}
         onClick={(e) => e.stopPropagation()}
         className="bg-white dark:bg-[#1E1B18] w-full max-w-md rounded-3xl overflow-hidden shadow-2xl border border-[#EAE4DC] dark:border-stone-800 p-6 animate-in fade-in zoom-in-95 duration-150"
       >
@@ -70,7 +76,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               {mode === 'login' ? 'Sign In to Your Account' : 'Create New Account'}
             </h2>
           </div>
-          <button 
+          <button aria-label="Close sign-in dialog" 
             onClick={onClose}
             className="w-8 h-8 rounded-full hover:bg-[#FAF7F0] dark:hover:bg-stone-800 flex items-center justify-center text-[#807872] transition-colors"
           >
@@ -109,10 +115,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         <form onSubmit={handleSubmit} className="space-y-3">
           {mode === 'signup' && (
             <div>
-              <label className="text-[11px] font-bold text-[#807872] block mb-1">Full Name</label>
+              <label htmlFor="auth-name" className="text-[11px] font-bold text-[#807872] block mb-1">Full Name</label>
               <div className="relative">
                 <User className="w-4 h-4 absolute left-3 top-3 text-[#807872]" />
                 <input
+                  id="auth-name"
                   type="text"
                   required
                   value={name}
@@ -125,10 +132,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           )}
 
           <div>
-            <label className="text-[11px] font-bold text-[#807872] block mb-1">Email Address</label>
+            <label htmlFor="auth-email" className="text-[11px] font-bold text-[#807872] block mb-1">Email Address</label>
             <div className="relative">
               <Mail className="w-4 h-4 absolute left-3 top-3 text-[#807872]" />
               <input
+                id="auth-email"
                 type="email"
                 required
                 value={email}
@@ -140,10 +148,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           </div>
 
           <div>
-            <label className="text-[11px] font-bold text-[#807872] block mb-1">Password</label>
+            <label htmlFor="auth-password" className="text-[11px] font-bold text-[#807872] block mb-1">Password</label>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3 top-3 text-[#807872]" />
               <input
+                id="auth-password"
                 type="password"
                 required
                 minLength={6}

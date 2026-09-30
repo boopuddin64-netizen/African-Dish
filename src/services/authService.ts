@@ -81,7 +81,9 @@ export async function createUserProfile(uid: string, data: Partial<UserProfile>)
   try {
     // Sanitize privileged properties during self-registration
     const sanitizedData = { ...data };
-    if (!sanitizedData.role) sanitizedData.role = 'customer';
+    // Self-registration is ALWAYS a customer; elevated roles are granted by admins via roleRequests.
+    sanitizedData.role = 'customer';
+    delete (sanitizedData as { isAdmin?: boolean }).isAdmin;
 
     const profile: UserProfile = {
       ...DEFAULT_USER_PROFILE,
@@ -96,19 +98,31 @@ export async function createUserProfile(uid: string, data: Partial<UserProfile>)
   }
 }
 
+/**
+ * Removes privileged fields that Firestore rules reject when written by the user themself:
+ * `role`, `isAdmin`, `verified` and the staff `assignedRestaurantId`. Role changes go through roleRequests
+ * (see roleService) and are granted by an admin; assignment is set at approval time.
+ */
+export function sanitizeProfileUpdates(updates: Partial<UserProfile>): Record<string, unknown> {
+  const { role: _role, ...rest } = updates as Partial<UserProfile> & { isAdmin?: boolean; verified?: boolean };
+  const safe: Record<string, unknown> = { ...rest };
+  delete safe.isAdmin;
+  delete safe.verified;
+  if (rest.kitchenStaff) {
+    const { assignedRestaurantId: _assigned, ...staffRest } = rest.kitchenStaff;
+    safe.kitchenStaff = staffRest;
+  }
+  return safe;
+}
+
 export async function updateUserProfile(uid: string, updates: Partial<UserProfile>): Promise<void> {
-  if (uid === 'guest_demo_user' || uid.startsWith('guest_')) {
-    // Do not attempt to persist guest user profile to Firestore
+  if (uid === 'guest_demo_user' || uid.startsWith('guest_') || !auth.currentUser || auth.currentUser.uid !== uid) {
+    // Guests / demo sessions are local-only: never attempt to persist them to Firestore
     return;
   }
 
   try {
-    // Protect role/admin state from arbitrary client update calls
-    const safeUpdates = { ...updates };
-    delete (safeUpdates as any).isAdmin;
-    delete (safeUpdates as any).verified;
-
-    await setDoc(doc(db, 'users', uid), safeUpdates, { merge: true });
+    await setDoc(doc(db, 'users', uid), sanitizeProfileUpdates(updates), { merge: true });
   } catch (err) {
     handleFirestoreError(err, { operation: 'update', path: `users/${uid}` });
   }

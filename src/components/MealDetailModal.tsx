@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { useEscapeKey } from '../lib/useEscapeKey';
 import { 
   X, 
   Star, 
@@ -52,6 +53,7 @@ export const MealDetailModal: React.FC = () => {
     }
   }, [selectedMeal, userProfile]);
 
+  useEscapeKey(Boolean(selectedMeal), () => setSelectedMeal(null));
   if (!selectedMeal) return null;
 
   const restaurant = allRestaurants.find(r => r.id === selectedMeal.restaurantId) || allRestaurants[0];
@@ -100,6 +102,9 @@ export const MealDetailModal: React.FC = () => {
     >
       <div 
         id="meal-detail-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Meal details"
         onClick={(e) => e.stopPropagation()}
         className="bg-white dark:bg-[#1E1B18] w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl border border-[#EAE4DC] dark:border-stone-800 max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-150"
       >
@@ -109,12 +114,14 @@ export const MealDetailModal: React.FC = () => {
             src={selectedMeal.image}
             alt={selectedMeal.name}
             referrerPolicy="no-referrer"
+                      loading="lazy"
+                      decoding="async"
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
           {/* Close button */}
-          <button
+          <button aria-label="Close meal details"
             onClick={() => setSelectedMeal(null)}
             className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/90 dark:bg-stone-800/90 hover:bg-white dark:hover:bg-stone-800 text-[#241A17] dark:text-stone-100 flex items-center justify-center shadow-md transition-colors"
           >
@@ -270,10 +277,10 @@ export const MealDetailModal: React.FC = () => {
 
           {/* Kitchen Special Instructions */}
           <div>
-            <label className="text-xs font-bold text-[#807872] dark:text-stone-400 uppercase tracking-wider block mb-1.5">
+            <label className="text-xs font-bold text-[#807872] dark:text-stone-400 uppercase tracking-wider block mb-1.5" htmlFor="mealdetailmodal-special-instructions-for-1">
               Special Instructions for Kitchen (Optional)
             </label>
-            <input
+            <input id="mealdetailmodal-special-instructions-for-1"
               type="text"
               value={specialInstructions}
               onChange={(e) => setSpecialInstructions(e.target.value)}
@@ -289,7 +296,7 @@ export const MealDetailModal: React.FC = () => {
           
           {/* Quantity Stepper */}
           <div className="flex items-center gap-2 bg-[#FAF7F0] dark:bg-stone-900 rounded-full p-1 border border-[#EAE4DC] dark:border-stone-800">
-            <button
+            <button aria-label="Decrease quantity"
               onClick={() => setQuantity(Math.max(1, quantity - 1))}
               className="w-7 h-7 rounded-full bg-white dark:bg-stone-800 flex items-center justify-center text-[#241A17] dark:text-stone-200 hover:bg-[#EAE4DC] dark:hover:bg-stone-700 transition-colors"
             >
@@ -298,7 +305,7 @@ export const MealDetailModal: React.FC = () => {
             <span className="w-6 text-center font-bold text-xs text-[#241A17] dark:text-stone-100">
               {quantity}
             </span>
-            <button
+            <button aria-label="Increase quantity"
               onClick={() => setQuantity(quantity + 1)}
               className="w-7 h-7 rounded-full bg-white dark:bg-stone-800 flex items-center justify-center text-[#241A17] dark:text-stone-200 hover:bg-[#EAE4DC] dark:hover:bg-stone-700 transition-colors"
             >

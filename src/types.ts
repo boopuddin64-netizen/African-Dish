@@ -1,6 +1,6 @@
 export type Currency = 'NGN' | 'GBP';
 
-export type UserRole = 'customer' | 'restaurant_staff' | 'courier';
+export type UserRole = 'customer' | 'restaurant_staff' | 'courier' | 'admin';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -128,6 +128,9 @@ export interface Restaurant {
   minimumOrderNGN: number;
   minimumOrderGBP: number;
   verified: boolean;
+  /** Marketplace verification state; new owner-created restaurants start as 'pending' (admin verifies). */
+  verificationStatus?: 'pending' | 'verified' | 'rejected';
+  ownerId?: string;
   cuisines: CountryCuisine[];
   coordinates?: { lat: number; lng: number };
 }
@@ -161,7 +164,7 @@ export interface UserPreferences {
 
 export interface BehavioralHistory {
   orderedMealIds: { mealId: string; count: number; lastOrderedAt: string }[];
-  rejectedMealIds: { mealId: string; reason: string; timestamp: string }[];
+  rejectedMealIds: { mealId: string; reason: RejectionReason; timestamp: string }[];
   ratedMeals: { mealId: string; rating: number; feedback: string[]; timestamp: string }[];
   rememberedCustomizations: Record<string, string[]>; // mealId -> list of customization option IDs
 }
@@ -338,6 +341,14 @@ export interface Order {
   paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
   paymentReference?: string;
   paymentMethod?: string;
+  /** UID of the assigned courier (set by the restaurant; rules verify it is a real courier). */
+  courierId?: string;
+  updatedAt?: string;
+  deliveredAt?: string;
+  /** Server-only fields, written by Cloud Functions (Admin SDK); clients can never set them. */
+  serverPriced?: boolean;
+  paidAt?: string;
+  paymentVerifiedBy?: 'paystack_webhook' | 'dev_simulation';
   createdAt: string;
   estimatedDeliveryTime: string;
   tapCount?: number;

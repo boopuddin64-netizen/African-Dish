@@ -111,6 +111,9 @@ export const RoleSwitcherModal: React.FC<RoleSwitcherModalProps> = ({ isOpen, on
     >
       <div 
         id="role-switcher-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Demo workspace switcher"
         onClick={(e) => e.stopPropagation()}
         className="bg-white dark:bg-[#1E1B18] w-full max-w-xl rounded-t-[28px] sm:rounded-3xl overflow-hidden shadow-2xl border-t sm:border border-[#EAE4DC] dark:border-stone-800 flex flex-col max-h-[88vh] sm:max-h-[90vh] my-0 sm:my-auto animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200"
       >
@@ -122,13 +125,13 @@ export const RoleSwitcherModal: React.FC<RoleSwitcherModalProps> = ({ isOpen, on
           <div className="pr-2">
             <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[#807872] dark:text-stone-400">
               <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#C85C43]" />
-              <span>Role-Based Authentication</span>
+              <span>Demo workspace switcher</span>
             </div>
             <h2 className="text-base sm:text-xl font-black text-[#241A17] dark:text-stone-100 mt-0.5 sm:mt-1">
               Select Workspace Mode
             </h2>
             <p className="text-[11px] sm:text-xs text-[#807872] dark:text-stone-400 mt-0.5">
-              Switch roles to experience Customer, Restaurant Staff, or Courier mode.
+              DEMO ONLY: previews a workspace on this device. Signed-in accounts can only open roles an admin has granted.
             </p>
           </div>
 

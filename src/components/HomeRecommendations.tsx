@@ -16,7 +16,7 @@ import {
   Check,
   RotateCcw
 } from 'lucide-react';
-import { ScoredRecommendation } from '../types';
+import { ScoredRecommendation, RejectionReason } from '../types';
 
 export const HomeRecommendations: React.FC = () => {
   const {
@@ -43,12 +43,13 @@ export const HomeRecommendations: React.FC = () => {
   const secondaryRecs = recommendations.slice(1, 3);
   const weakMatchWarning = recommendations.length > 0 && recommendations[0].totalScore < 35;
 
-  const rejectionReasons = [
+  const rejectionReasons: RejectionReason[] = [
     'Too expensive',
     'Too spicy',
-    'Too far / long ETA',
-    'Not craving this cuisine',
-    'Ate this recently'
+    'Too far',
+    'Not hungry for this',
+    'Had it recently',
+    "Don't like this"
   ];
 
   const greeting = mealPeriod === 'breakfast' 
@@ -79,7 +80,7 @@ export const HomeRecommendations: React.FC = () => {
     setTimeout(() => setAddedAnimationMealId(null), 1200);
   };
 
-  const handleRejection = (mealId: string, reason: string) => {
+  const handleRejection = (mealId: string, reason: RejectionReason) => {
     recordTap(`Rejected meal ${mealId} with reason: ${reason}`);
     rejectMeal(mealId, reason);
     setActiveRejectMealId(null);
@@ -141,6 +142,8 @@ export const HomeRecommendations: React.FC = () => {
                       src={m.image} 
                       alt={m.name} 
                       referrerPolicy="no-referrer"
+                      loading="lazy"
+                      decoding="async"
                       className="w-12 h-12 rounded-xl object-cover shrink-0"
                     />
                     <div className="min-w-0">
@@ -232,6 +235,8 @@ export const HomeRecommendations: React.FC = () => {
                 src={primaryRec.meal.image}
                 alt={primaryRec.meal.name}
                 referrerPolicy="no-referrer"
+                      fetchPriority="high"
+                      decoding="async"
                 className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500 ease-out"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
@@ -331,7 +336,7 @@ export const HomeRecommendations: React.FC = () => {
               <div className="flex items-center gap-2">
                 {/* Not Interested Trigger */}
                 <div className="relative">
-                  <button
+                  <button aria-label="Not interested in this meal"
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -473,6 +478,8 @@ export const HomeRecommendations: React.FC = () => {
                       src={rec.meal.image}
                       alt={rec.meal.name}
                       referrerPolicy="no-referrer"
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover group-hover:scale-104 transition-transform duration-300"
                     />
                     <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-[#FAF7F0]/90 dark:bg-stone-900/90 backdrop-blur-xs text-[11px] font-bold text-[#241A17] dark:text-stone-100">
@@ -518,11 +525,11 @@ export const HomeRecommendations: React.FC = () => {
                   </span>
 
                   <div className="flex items-center gap-1.5">
-                    <button
+                    <button aria-label="Not interested in this meal"
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        rejectMeal(rec.meal.id, 'Not interested');
+                        rejectMeal(rec.meal.id, 'Other');
                       }}
                       className="p-1.5 rounded-full hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 text-[#807872] dark:text-stone-400 transition-colors"
                       title="Not interested"

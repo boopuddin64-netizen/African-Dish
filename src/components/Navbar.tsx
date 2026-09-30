@@ -13,7 +13,8 @@ import {
   User,
   Sun,
   Moon,
-  Bike
+  Bike,
+  ShieldCheck
 } from 'lucide-react';
 import { MealPeriod } from '../types';
 import { RoleSwitcherModal } from './RoleSwitcherModal';
@@ -54,6 +55,7 @@ export const Navbar: React.FC = () => {
   const isCustomer = userProfile.role === 'customer';
   const isMerchant = userProfile.role === 'restaurant_staff';
   const isCourier = userProfile.role === 'courier';
+  const isAdmin = userProfile.role === 'admin';
 
   return (
     <header id="app-navbar" className="sticky top-0 z-40 bg-[#FAF7F0]/95 dark:bg-[#181512]/95 backdrop-blur-md border-b border-[#EAE4DC] dark:border-stone-800 transition-colors w-full">
@@ -68,7 +70,9 @@ export const Navbar: React.FC = () => {
               id="brand-logo-btn"
               onClick={() => {
                 recordTap('Clicked brand home');
-                if (isMerchant) {
+                if (isAdmin) {
+                  setCurrentView('admin');
+                } else if (isMerchant) {
                   setCurrentView('merchant');
                 } else if (isCourier) {
                   setCurrentView('courier');
@@ -87,7 +91,7 @@ export const Navbar: React.FC = () => {
                     Ounjé
                   </span>
                   <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider px-1 sm:px-1.5 py-0.5 rounded bg-[#5F765A]/15 dark:bg-[#5F765A]/30 text-[#5F765A] dark:text-[#88a881] shrink-0">
-                    {isMerchant ? 'Kitchen' : (isCourier ? 'Courier' : 'Food')}
+                    {isAdmin ? 'Admin' : isMerchant ? 'Kitchen' : (isCourier ? 'Courier' : 'Food')}
                   </span>
                 </div>
                 <p className="text-[11px] text-[#807872] dark:text-stone-400 truncate hidden xl:block">
@@ -329,6 +333,24 @@ export const Navbar: React.FC = () => {
                 </button>
               )}
 
+              {isAdmin && (
+                <button
+                  id="nav-admin-btn"
+                  onClick={() => {
+                    recordTap('Switched to Admin console');
+                    setCurrentView('admin');
+                  }}
+                  className={`px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors ${
+                    currentView === 'admin'
+                      ? 'bg-[#241A17] text-white shadow-2xs'
+                      : 'text-[#807872] dark:text-stone-400 hover:text-[#241A17] dark:hover:text-stone-200'
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Admin</span>
+                </button>
+              )}
+
               <button
                 id="nav-profile-btn"
                 onClick={() => {
@@ -360,7 +382,7 @@ export const Navbar: React.FC = () => {
                   ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
                   : 'bg-[#C85C43]/10 text-[#C85C43] dark:text-[#e0755c] border-[#C85C43]/30 hover:bg-[#C85C43]/20'
               }`}
-              title="Click to switch between Customer, Restaurant Staff, and Courier roles"
+              title="Workspace switcher (demo). Real roles are granted by an admin."
             >
               {isMerchant ? (
                 <Store className="w-3.5 h-3.5 text-[#5F765A] dark:text-[#88a881]" />
@@ -503,6 +525,24 @@ export const Navbar: React.FC = () => {
             >
               <Bike className="w-4 h-4 shrink-0" />
               <span className="truncate text-xs">Courier</span>
+            </button>
+          )}
+
+          {isAdmin && (
+            <button
+              id="mobile-nav-admin-btn"
+              onClick={() => {
+                recordTap('Switched to Admin console (Mobile)');
+                setCurrentView('admin');
+              }}
+              className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl transition-colors ${
+                currentView === 'admin'
+                  ? 'bg-[#241A17] text-white font-bold shadow-2xs'
+                  : 'text-[#807872] dark:text-stone-400 hover:text-[#241A17] dark:hover:text-stone-200'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span className="truncate text-xs">Admin</span>
             </button>
           )}
 
