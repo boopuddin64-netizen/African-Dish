@@ -15,20 +15,34 @@ import { handleFirestoreError } from '../lib/errorHandling';
 export const RESTAURANTS_COLLECTION = 'restaurants';
 export const MEALS_COLLECTION = 'meals';
 
+export interface SeedActor {
+  uid: string;
+  role: string;
+}
+
 /**
- * Seeds initial restaurant and meal data to Firestore if not already seeded.
- * Prevents overwriting user modifications once seeded.
+ * Seeds demo restaurants + meals into Firestore when the collections are empty.
+ *
+ * Firestore rules only let admins create verified restaurants / meals for arbitrary restaurants, so seeding is
+ * ADMIN-ONLY: for anyone else (guests, customers, staff) this is a no-op and the UI keeps using the bundled mock data.
+ * Demo restaurants are owned by the seeding admin (`ownerId`) and flagged `isDemo`.
  */
-export async function seedFirestoreInitialData(): Promise<void> {
+export async function seedFirestoreInitialData(actor?: SeedActor | null): Promise<void> {
+  if (!actor || actor.role !== 'admin') {
+    return;
+  }
   try {
     const restSnap = await getDocs(collection(db, RESTAURANTS_COLLECTION));
     if (restSnap.empty) {
-      console.log('Seeding initial Demo Restaurants to Firestore...');
+      console.log('Seeding initial Demo Restaurants to Firestore (admin)...');
       for (const r of RESTAURANTS) {
         const coords = CITY_COORDINATES[r.city] || CITY_COORDINATES['Port Harcourt'];
         const demoRestaurant: Restaurant = {
           ...r,
           name: r.name.includes('[Demo]') ? r.name : `${r.name} [Demo]`,
+          ownerId: actor.uid,
+          verified: true,
+          verificationStatus: 'verified',
           isOpen: true,
           status: 'open',
           acceptingOrders: true,
@@ -41,7 +55,7 @@ export async function seedFirestoreInitialData(): Promise<void> {
 
     const mealsSnap = await getDocs(collection(db, MEALS_COLLECTION));
     if (mealsSnap.empty) {
-      console.log('Seeding initial Demo Meals to Firestore...');
+      console.log('Seeding initial Demo Meals to Firestore (admin)...');
       for (const m of MEALS) {
         const demoMeal: Meal = {
           ...m,

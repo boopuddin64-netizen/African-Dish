@@ -641,6 +641,91 @@ export async function runRealFirestoreRulesTests() {
   );
 
   console.log('\n====================================================');
+  console.log('TIGHTENED RULES: ORDER CREATE SHAPE, RESTAURANT VERIFICATION, EVENTS, ROLE REQUESTS (44+)');
+  console.log('====================================================');
+
+  const validDraft = (id: string, over: Record<string, unknown> = {}) => ({
+    id,
+    userId: 'cust_alice',
+    restaurantId: 'rest_a',
+    items: [{ id: 'i1', quantity: 1 }],
+    subtotal: 30, deliveryFee: 3.5, serviceFee: 1.5, total: 35,
+    status: 'payment_pending',
+    paymentStatus: 'pending',
+    createdAt: '2026-08-29T12:00:00Z',
+    ...over,
+  });
+
+  await testAssertSucceeds(44, 'Customer creates a well-formed draft order (payment_pending / pending)',
+    setDoc(doc(aliceDb, 'orders', 'ord_new_ok'), validDraft('ord_new_ok')));
+  await testAssertFails(45, 'Customer creates order with status paid',
+    setDoc(doc(aliceDb, 'orders', 'ord_new_paid'), validDraft('ord_new_paid', { status: 'paid' })));
+  await testAssertFails(46, 'Customer creates order with paymentStatus paid',
+    setDoc(doc(aliceDb, 'orders', 'ord_new_paid2'), validDraft('ord_new_paid2', { paymentStatus: 'paid' })));
+  await testAssertFails(47, 'Customer creates order with forged server-only field serverPriced',
+    setDoc(doc(aliceDb, 'orders', 'ord_new_sp'), validDraft('ord_new_sp', { serverPriced: true })));
+  await testAssertFails(48, 'Customer creates order with negative total',
+    setDoc(doc(aliceDb, 'orders', 'ord_new_neg'), validDraft('ord_new_neg', { total: -5 })));
+  await testAssertFails(49, 'Customer creates order where items is not a list',
+    setDoc(doc(aliceDb, 'orders', 'ord_new_items'), validDraft('ord_new_items', { items: 'nope' })));
+  await testAssertFails(50, 'Customer creates order with non-string restaurantId',
+    setDoc(doc(aliceDb, 'orders', 'ord_new_rid'), validDraft('ord_new_rid', { restaurantId: 42 })));
+  await testAssertFails(51, 'Customer creates order pre-assigning a courierId',
+    setDoc(doc(aliceDb, 'orders', 'ord_new_cid'), validDraft('ord_new_cid', { courierId: 'courier_dave_a' })));
+  await testAssertFails(52, 'Customer creates order with unknown extra field',
+    setDoc(doc(aliceDb, 'orders', 'ord_new_extra'), validDraft('ord_new_extra', { hackedField: 1 })));
+  await testAssertFails(53, 'Customer creates order for another user (userId != uid)',
+    setDoc(doc(aliceDb, 'orders', 'ord_new_other'), validDraft('ord_new_other', { userId: 'cust_bob' })));
+
+  const newRest = (over: Record<string, unknown> = {}) => ({
+    name: 'New Kitchen', city: 'London', ownerId: 'cust_bob', verified: false, verificationStatus: 'pending', ...over,
+  });
+  await testAssertSucceeds(54, 'User creates own restaurant as unverified/pending',
+    setDoc(doc(bobDb, 'restaurants', 'rest_new_ok'), newRest()));
+  await testAssertFails(55, 'User creates own restaurant already verified',
+    setDoc(doc(bobDb, 'restaurants', 'rest_new_ver'), newRest({ verified: true })));
+  await testAssertFails(56, 'User creates own restaurant with verificationStatus verified',
+    setDoc(doc(bobDb, 'restaurants', 'rest_new_ver2'), newRest({ verificationStatus: 'verified' })));
+  await testAssertFails(57, 'Owner attempts to self-verify their restaurant via update',
+    updateDoc(doc(bobDb, 'restaurants', 'rest_new_ok'), { verified: true, verificationStatus: 'verified' }));
+  await testAssertSucceeds(58, 'Admin verifies a pending restaurant',
+    updateDoc(doc(adminDb, 'restaurants', 'rest_new_ok'), { verified: true, verificationStatus: 'verified' }));
+  await testAssertSucceeds(59, 'Admin creates a verified (demo/seed) restaurant',
+    setDoc(doc(adminDb, 'restaurants', 'rest_seed'), { name: 'Seed', city: 'London', ownerId: 'admin_zack', verified: true, verificationStatus: 'verified' }));
+
+  const evt = (over: Record<string, unknown> = {}) => ({
+    userId: 'cust_alice', eventType: 'impression', mealId: 'meal_a1', position: 1, timestamp: '2026-08-29T12:00:00Z', ...over,
+  });
+  await testAssertSucceeds(60, 'Customer logs a valid recommendation event',
+    setDoc(doc(aliceDb, 'recommendation_events', 'evt_ok'), evt()));
+  await testAssertFails(61, 'Recommendation event with unknown field',
+    setDoc(doc(aliceDb, 'recommendation_events', 'evt_x'), evt({ payload: 'x' })));
+  await testAssertFails(62, 'Recommendation event with unknown eventType',
+    setDoc(doc(aliceDb, 'recommendation_events', 'evt_t'), evt({ eventType: 'hack' })));
+  await testAssertFails(63, 'Recommendation event with oversized string',
+    setDoc(doc(aliceDb, 'recommendation_events', 'evt_big'), evt({ locationContext: 'x'.repeat(500) })));
+  await testAssertFails(64, 'Recommendation event spoofing another userId',
+    setDoc(doc(aliceDb, 'recommendation_events', 'evt_spoof'), evt({ userId: 'cust_bob' })));
+
+  const rr = (uid: string, role: string, over: Record<string, unknown> = {}) => ({
+    userId: uid, requestedRole: role, status: 'pending', createdAt: '2026-08-29T12:00:00Z', ...over,
+  });
+  await testAssertSucceeds(65, 'User files a role request for courier',
+    setDoc(doc(aliceDb, 'roleRequests', 'cust_alice_courier'), rr('cust_alice', 'courier')));
+  await testAssertFails(66, 'User files a role request for admin',
+    setDoc(doc(aliceDb, 'roleRequests', 'cust_alice_admin'), rr('cust_alice', 'admin')));
+  await testAssertFails(67, 'User files an already-approved role request',
+    setDoc(doc(bobDb, 'roleRequests', 'cust_bob_courier'), rr('cust_bob', 'courier', { status: 'approved' })));
+  await testAssertFails(68, 'User approves own role request',
+    updateDoc(doc(aliceDb, 'roleRequests', 'cust_alice_courier'), { status: 'approved' }));
+  await testAssertFails(69, 'Another user reads someone else\'s role request',
+    getDoc(doc(bobDb, 'roleRequests', 'cust_alice_courier')));
+  await testAssertSucceeds(70, 'Admin approves a role request',
+    updateDoc(doc(adminDb, 'roleRequests', 'cust_alice_courier'), { status: 'approved', reviewedBy: 'admin_zack' }));
+  await testAssertFails(71, 'Staff member re-points themselves to another restaurant',
+    updateDoc(doc(sallyDb, 'users', 'staff_sally_a'), { kitchenStaff: { assignedRestaurantId: 'rest_b' } }));
+
+  console.log('\n====================================================');
   console.log(`REAL FIRESTORE RULES ENGINE RESULTS:`);
   console.log(`TOTAL REAL ASSERTIONS: ${passCount + failCount}`);
   console.log(`PASSED: ${passCount}`);

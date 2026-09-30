@@ -65,6 +65,31 @@ service cloud.firestore {
         (oldStatus == 'on_the_way' && newStatus == 'delivered');
     }
 
+    function isNonNegativeNumber(v) {
+      return (v is int || v is float) && v >= 0;
+    }
+
+    // Fields a client may set when creating an order draft. Server-only fields (serverPriced, paidAt, paymentVerifiedBy,
+    // statusHistory, courierId) are deliberately absent.
+    function orderCreateFields() {
+      return ['id', 'orderNumber', 'userId', 'customerName', 'customerPhone', 'items', 'restaurantId', 'restaurantName',
+        'fulfillmentMethod', 'deliveryAddress', 'subtotal', 'deliveryFee', 'serviceFee', 'total', 'currency', 'status',
+        'paymentStatus', 'paymentReference', 'paymentMethod', 'createdAt', 'updatedAt', 'estimatedDeliveryTime', 'tapCount',
+        'driverName', 'driverPhone', 'driverVehicle', 'courierMessages'];
+    }
+
+    function isValidRating(r) {
+      return r is map && r.keys().hasOnly(['foodRating', 'restaurantRating', 'deliveryRating', 'feedbackTags', 'timestamp']) &&
+        r.foodRating is int && r.foodRating >= 1 && r.foodRating <= 5 &&
+        r.restaurantRating is int && r.restaurantRating >= 1 && r.restaurantRating <= 5 &&
+        r.deliveryRating is int && r.deliveryRating >= 1 && r.deliveryRating <= 5;
+    }
+
+    function isCourierUser(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)) &&
+        get(/databases/$(database)/documents/users/$(uid)).data.get('role', '') == 'courier';
+    }
+
     // --- Users Collection ---
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
@@ -81,7 +106,10 @@ service cloud.firestore {
         // Ensure user cannot self-promote to admin or change role/verification
         (!('role' in request.resource.data) || request.resource.data.get('role', '') == resource.data.get('role', '')) &&
         (!('isAdmin' in request.resource.data) || request.resource.data.get('isAdmin', false) == resource.data.get('isAdmin', false)) &&
-        (!('verified' in request.resource.data) || request.resource.data.get('verified', false) == resource.data.get('verified', false))
+        (!('verified' in request.resource.data) || request.resource.data.get('verified', false) == resource.data.get('verified', false)) &&
+        // A staff member may not re-point themselves at another restaurant (assignment is admin-granted via role requests)
+        request.resource.data.get('kitchenStaff', {}).get('assignedRestaurantId', '') ==
+          resource.data.get('kitchenStaff', {}).get('assignedRestaurantId', '')
       )) || isAdmin();
 
       allow delete: if isAdmin();
@@ -92,17 +120,25 @@ service cloud.firestore {
       // Public read for marketplace display
       allow read: if true;
 
-      // Creation restricted to restaurant owner or admin
+      // Creation: the owner may only create an UNVERIFIED, pending listing. Only admins can create verified restaurants.
+      // (Verification is granted by an admin via update; the placeOrder function refuses unverified restaurants.)
       allow create: if isAuthenticated() && (
-        request.resource.data.get('ownerId', '') == request.auth.uid || isAdmin()
+        (
+          request.resource.data.get('ownerId', '') == request.auth.uid &&
+          request.resource.data.get('verified', false) == false &&
+          request.resource.data.get('verificationStatus', '') == 'pending'
+        ) || isAdmin()
       );
 
-      // Update: only the restaurant owner or admin can update; ownership transfer/ownerId change is strictly forbidden
+      // Update: only the restaurant owner or admin can update; ownership transfer/ownerId change is strictly forbidden,
+      // and owners cannot verify themselves.
       allow update: if isAuthenticated() && (
         (
           resource.data.get('ownerId', '') == request.auth.uid &&
-          (!('ownerId' in request.resource.data) || request.resource.data.ownerId == resource.data.get('ownerId', ''))
-        ) || 
+          (!('ownerId' in request.resource.data) || request.resource.data.ownerId == resource.data.get('ownerId', '')) &&
+          request.resource.data.get('verified', false) == resource.data.get('verified', false) &&
+          request.resource.data.get('verificationStatus', '') == resource.data.get('verificationStatus', '')
+        ) ||
         isAdmin()
       );
 
@@ -152,11 +188,25 @@ service cloud.firestore {
         isAdmin()
       );
 
-      // Create: Customer can create their own order with valid initial status
-      allow create: if isAuthenticated() && 
+      // Create: a customer may create only their own DRAFT order in an initial state.
+      // Rules can only check *shape* (field allowlist, types, non-negative numbers, initial status). They cannot
+      // re-price an order: authoritative pricing is done by the `placeOrder` Cloud Function (Admin SDK), which is the
+      // only writer of `serverPriced`, and the payment webhook refuses to pay orders that are not `serverPriced`.
+      allow create: if isAuthenticated() &&
         request.resource.data.userId == request.auth.uid &&
+        request.resource.data.keys().hasOnly(orderCreateFields()) &&
+        request.resource.data.keys().hasAll(['userId', 'restaurantId', 'items', 'status', 'paymentStatus', 'total']) &&
+        request.resource.data.items is list &&
+        request.resource.data.items.size() > 0 && request.resource.data.items.size() <= 50 &&
+        request.resource.data.restaurantId is string &&
+        request.resource.data.restaurantId.size() > 0 &&
+        isNonNegativeNumber(request.resource.data.get('subtotal', 0)) &&
+        isNonNegativeNumber(request.resource.data.get('deliveryFee', 0)) &&
+        isNonNegativeNumber(request.resource.data.get('serviceFee', 0)) &&
+        isNonNegativeNumber(request.resource.data.total) &&
         (request.resource.data.status in ['cart', 'checkout', 'payment_pending']) &&
-        (request.resource.data.paymentStatus in ['pending', 'unpaid']);
+        (request.resource.data.paymentStatus in ['pending', 'unpaid']) &&
+        !('courierId' in request.resource.data);
 
       // Update: Role-based field allowlists and State Machine transitions
       allow update: if isAuthenticated() &&
@@ -166,16 +216,27 @@ service cloud.firestore {
           // 1. Customer: Can only update specific fields (status to allowed states, rating, courierMessages, tapCount, updatedAt)
           (resource.data.userId == request.auth.uid &&
             request.resource.data.status in ['checkout', 'payment_pending', 'cancelled', resource.data.status] &&
+            // customers may cancel only before the kitchen has accepted (afterwards: restaurant/admin/refund flow)
+            (request.resource.data.status != 'cancelled' || resource.data.status in
+              ['cart', 'checkout', 'payment_pending', 'payment_failed', 'paid', 'restaurant_pending', 'cancelled']) &&
             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'status', 'ratingSubmitted', 'courierMessages', 'tapCount', 'updatedAt'
-            ])
+            ]) &&
+            // rating: only once, only after delivery, and only 1-5 star values
+            (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['ratingSubmitted']) || (
+              resource.data.status == 'delivered' && !('ratingSubmitted' in resource.data) &&
+              isValidRating(request.resource.data.ratingSubmitted)
+            ))
           ) ||
           // 2. Restaurant Owner / Authorized Staff: Can only update status to restaurant stages, prep ETA, courier assignment, messages, updatedAt
           (isRestaurantAuthorized(resource.data.restaurantId) &&
             request.resource.data.status in ['accepted', 'preparing', 'ready', 'rejected', 'cancelled', resource.data.status] &&
             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'status', 'estimatedDeliveryTime', 'courierMessages', 'updatedAt', 'courierId'
-            ])
+            ]) &&
+            // a courier may only be assigned if that uid really has the courier role
+            (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['courierId']) ||
+              isCourierUser(request.resource.data.courierId))
           ) ||
           // 3. Assigned Courier: Can only update delivery status, deliveredAt, driver info, messages, updatedAt
           (resource.data.get('courierId', '') != '' && resource.data.get('courierId', '') == request.auth.uid &&
@@ -197,11 +258,42 @@ service cloud.firestore {
         resource.data.userId == request.auth.uid || isAdmin()
       );
 
-      allow create: if isAuthenticated() && (
-        request.resource.data.userId == request.auth.uid
-      );
+      // Analytics events: own userId only, strict field allowlist, enum event type and bounded string/number sizes.
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.keys().hasOnly(['userId', 'mealId', 'restaurantId', 'eventType', 'rejectionReason', 'position', 'timestamp', 'locationContext']) &&
+        request.resource.data.keys().hasAll(['userId', 'eventType', 'timestamp']) &&
+        request.resource.data.eventType in ['impression', 'meal_opened', 'selected', 'clicked', 'rejected', 'added_to_cart',
+          'meal_added', 'ordered', 'meal_ordered', 'rated', 'meal_rated'] &&
+        request.resource.data.timestamp is string && request.resource.data.timestamp.size() <= 40 &&
+        (!('mealId' in request.resource.data) || (request.resource.data.mealId is string && request.resource.data.mealId.size() <= 128)) &&
+        (!('restaurantId' in request.resource.data) || (request.resource.data.restaurantId is string && request.resource.data.restaurantId.size() <= 128)) &&
+        (!('rejectionReason' in request.resource.data) || (request.resource.data.rejectionReason is string && request.resource.data.rejectionReason.size() <= 64)) &&
+        (!('locationContext' in request.resource.data) || (request.resource.data.locationContext is string && request.resource.data.locationContext.size() <= 120)) &&
+        (!('position' in request.resource.data) || (request.resource.data.position is int && request.resource.data.position >= 0 && request.resource.data.position <= 100));
 
       allow update, delete: if isAdmin();
+    }
+
+    // --- Role Requests Collection ---
+    // Users cannot promote themselves. They file a request (document id `${uid}_${role}`); an admin approves it,
+    // which updates users/{uid}.role (+ staff assignment) and marks the request approved.
+    match /roleRequests/{requestId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.keys().hasOnly(['userId', 'requestedRole', 'restaurantId', 'note', 'status', 'createdAt']) &&
+        request.resource.data.keys().hasAll(['userId', 'requestedRole', 'status', 'createdAt']) &&
+        request.resource.data.requestedRole in ['restaurant_staff', 'courier'] &&
+        request.resource.data.status == 'pending' &&
+        requestId == request.auth.uid + '_' + request.resource.data.requestedRole &&
+        (!('note' in request.resource.data) || (request.resource.data.note is string && request.resource.data.note.size() <= 500)) &&
+        (!('restaurantId' in request.resource.data) || (request.resource.data.restaurantId is string && request.resource.data.restaurantId.size() <= 128));
+
+      // Admin reviews; a requester may withdraw their own request only after it was rejected (so they can re-apply).
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (resource.data.userId == request.auth.uid && resource.data.status == 'rejected');
     }
   }
 }

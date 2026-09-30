@@ -241,14 +241,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     async function initFirebaseSync() {
       setIsLoadingData(true);
-      await seedFirestoreInitialData();
-      if (cancelled) return;
 
       // Auth Sync
       unsubscribeAuth = subscribeToAuthChanges((profile) => {
         if (profile) {
           setUserProfile(profile);
           if (profile.theme) setTheme(profile.theme);
+          // Demo data is seeded by admins only (Firestore rules); a no-op for everyone else.
+          void seedFirestoreInitialData({ uid: profile.id, role: profile.role });
         } else {
           setUserProfile(INITIAL_USER_PROFILE);
         }

@@ -3,11 +3,14 @@
  */
 import { runRealFirestoreRulesTests } from './firestoreRulesReal.test';
 import { runOrderIntegrityTests } from './orderIntegrity.test';
+import { runFunctionsLogicTests } from './functionsLogic.test';
 
 async function main() {
   console.log('Running African-Dish Real Firestore Security and Integrity Test Suite...\n');
   try {
     runOrderIntegrityTests();
+    console.log('\n');
+    runFunctionsLogicTests();
     console.log('\n');
     await runRealFirestoreRulesTests();
     console.log('\n🎉 ALL REAL TESTS PASSED SUCCESSFULLY (0 FAILURES)');

@@ -128,6 +128,9 @@ export interface Restaurant {
   minimumOrderNGN: number;
   minimumOrderGBP: number;
   verified: boolean;
+  /** Marketplace verification state; new owner-created restaurants start as 'pending' (admin verifies). */
+  verificationStatus?: 'pending' | 'verified' | 'rejected';
+  ownerId?: string;
   cuisines: CountryCuisine[];
   coordinates?: { lat: number; lng: number };
 }
