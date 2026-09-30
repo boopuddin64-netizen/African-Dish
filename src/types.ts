@@ -341,6 +341,14 @@ export interface Order {
   paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
   paymentReference?: string;
   paymentMethod?: string;
+  /** UID of the assigned courier (set by the restaurant; rules verify it is a real courier). */
+  courierId?: string;
+  updatedAt?: string;
+  deliveredAt?: string;
+  /** Server-only fields, written by Cloud Functions (Admin SDK); clients can never set them. */
+  serverPriced?: boolean;
+  paidAt?: string;
+  paymentVerifiedBy?: 'paystack_webhook' | 'dev_simulation';
   createdAt: string;
   estimatedDeliveryTime: string;
   tapCount?: number;

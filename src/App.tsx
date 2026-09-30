@@ -14,6 +14,8 @@ import { CheckoutModal } from './components/CheckoutModal';
 import { OrderTrackingModal } from './components/OrderTrackingModal';
 import { PreferenceSafetyModal } from './components/PreferenceSafetyModal';
 import { RestaurantDetailsModal } from './components/RestaurantDetailsModal';
+import { Toast } from './components/Toast';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const MainContent: React.FC = () => {
   const { 
@@ -55,6 +57,8 @@ const MainContent: React.FC = () => {
           </motion.div>
         </AnimatePresence>
       </main>
+
+      <Toast />
 
       {/* Global Modals & Drawers */}
       <MealDetailModal />
@@ -141,8 +145,10 @@ const MainContent: React.FC = () => {
 
 export default function App() {
   return (
-    <AppProvider>
-      <MainContent />
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <MainContent />
+      </AppProvider>
+    </ErrorBoundary>
   );
 }

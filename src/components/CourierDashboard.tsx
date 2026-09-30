@@ -73,7 +73,7 @@ export const CourierDashboard: React.FC = () => {
   // Active in-flight orders that courier can fulfill
   const activeDeliveryOrders = orders.filter(
     o => o.status === 'out_for_delivery' || o.status === 'preparing' || o.status === 'ready'
-  );
+  ); // (the orders subscription already filters to orders assigned to this courier)
 
   const [selectedChatOrderId, setSelectedChatOrderId] = useState<string | null>(null);
   const selectedChatOrder = orders.find(o => o.id === selectedChatOrderId) || null;
@@ -116,7 +116,7 @@ export const CourierDashboard: React.FC = () => {
     alert(`Dispatch accepted! Proceed to ${accepted.restaurantName} for pickup.`);
   };
 
-  const handleStatusUpdate = (orderId: string, nextStatus: any) => {
+  const handleStatusUpdate = (orderId: string, nextStatus: 'out_for_delivery' | 'delivered') => {
     recordTap(`Courier updated order ${orderId} to ${nextStatus}`);
     updateOrderStatus(orderId, nextStatus);
   };

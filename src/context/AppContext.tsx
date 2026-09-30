@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
 import { 
   Meal, 
   Restaurant, 
@@ -50,9 +50,17 @@ import {
 } from '../services/mealService';
 import { 
   subscribeToOrders, 
-  createOrderInFirestore, 
-  updateOrderStatusInFirestore 
+  updateOrderStatusInFirestore,
+  submitOrderRatingInFirestore,
+  appendCourierMessageInFirestore,
+  assignCourierInFirestore,
+  GUEST_ORDER_MESSAGE,
+  OrderServiceError
 } from '../services/orderService';
+import { placeOrderOnServer, startPayment, cartToServerItems } from '../services/paymentService';
+import { auth } from '../lib/firebase';
+import { AppNotification, NotificationType, notify, subscribeNotifications } from '../lib/notifications';
+import { generateId } from '../lib/ids';
 import { logRecommendationEvent } from '../services/analyticsService';
 import { MAX_SAVED_LOCATIONS } from '../services/locationService';
 
@@ -102,7 +110,7 @@ interface AppContextType {
   toggleDietaryFlag: (flag: DietaryFlag) => void;
   updateSafetyNotes: (notes: string) => void;
   resetPreferencesToDefault: () => void;
-  sendCourierMessage: (orderId: string, text: string) => void;
+  sendCourierMessage: (orderId: string, text: string) => Promise<void>;
 
   // Modals & UI States
   selectedMeal: Meal | null;
@@ -137,10 +145,18 @@ interface AppContextType {
   orders: Order[];
   activeOrder: Order | null;
   setActiveOrder: (order: Order | null) => void;
+  /** Places a server-priced order and starts payment. Throws (after toasting) for guests / validation / server errors. */
   placeOrder: (fulfillmentMethod: 'delivery' | 'pickup') => Promise<Order>;
-  submitOrderRating: (orderId: string, foodRating: number, restaurantRating: number, deliveryRating: number, feedbackTags: string[]) => void;
-  cancelActiveOrder: (orderId: string) => void;
-  updateOrderStatus: (orderId: string, status: OrderStatus) => void;
+  submitOrderRating: (orderId: string, foodRating: number, restaurantRating: number, deliveryRating: number, feedbackTags: string[]) => Promise<void>;
+  cancelActiveOrder: (orderId: string) => Promise<void>;
+  /** Resolves true on success; on failure shows a toast and resolves false (never writes on invalid transitions). */
+  updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<boolean>;
+  assignCourier: (orderId: string, courierId: string) => Promise<boolean>;
+
+  // Toasts / notifications
+  toasts: AppNotification[];
+  showToast: (message: string, type?: NotificationType) => void;
+  dismissToast: (id: string) => void;
 
   // Merchant Portal State & Stock Management
   activeMerchantRestaurantId: string;
@@ -172,6 +188,13 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+function orderErrorMessage(err: unknown): string {
+  if (err instanceof OrderServiceError) return err.message;
+  const code = (err as { code?: string })?.code ?? '';
+  if (code.includes('permission-denied')) return "You don't have permission to do that with this order.";
+  return (err as { message?: string })?.message || 'Something went wrong updating the order.';
+}
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Navigation
@@ -219,6 +242,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Tap tracking
   const [tapCount, setTapCount] = useState<number>(1);
   const [recentTapLogs, setRecentTapLogs] = useState<string[]>(['Opened App']);
+
+  // Toasts (fed by lib/notifications so services and error handlers can surface messages)
+  const [toasts, setToasts] = useState<AppNotification[]>([]);
+  const dismissToast = useCallback((id: string) => setToasts(prev => prev.filter(t => t.id !== id)), []);
+  const showToast = useCallback((message: string, type: NotificationType = 'info') => notify(message, type), []);
+  useEffect(() => {
+    const timers = new Map<string, ReturnType<typeof setTimeout>>();
+    const unsubscribe = subscribeNotifications((n) => {
+      setToasts(prev => [...prev.slice(-3), n]);
+      timers.set(n.id, setTimeout(() => dismissToast(n.id), n.type === 'error' ? 8000 : 4000));
+    });
+    return () => {
+      unsubscribe();
+      timers.forEach(clearTimeout);
+    };
+  }, [dismissToast]);
 
   // Theme
   const [theme, setTheme] = useState<ThemeMode>(() => userProfile.theme || 'light');
@@ -289,12 +328,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       activeMerchantRestaurantId,
       (orderList) => {
         setOrders(orderList);
-        if (orderList.length > 0) {
-          const currentActive = orderList.find(o => 
-            o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'rejected'
-          );
-          if (currentActive) setActiveOrder(currentActive);
-        }
+        setActiveOrder(prev => {
+          // keep the order the user is looking at fresh with live server updates
+          if (prev) {
+            const fresh = orderList.find(o => o.id === prev.id);
+            if (fresh) return fresh;
+          }
+          return prev;
+        });
       }
     );
     return () => unsub();
@@ -376,7 +417,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     recordTap('Added new saved location');
     const newLoc: SavedLocation = {
       ...locationData,
-      id: `loc_${Date.now()}`
+      id: generateId('loc')
     };
     const updatedLocs = [...savedLocations, newLoc];
     setUserProfile(prev => {
@@ -508,7 +549,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const itemPrice = basePrice + customTotal;
 
     const newItem: CartItem = {
-      id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+      id: generateId('item'),
       meal,
       restaurant,
       quantity: 1,
@@ -564,53 +605,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const cartServiceFee = useMemo(() => {
     if (cartItems.length === 0) return 0;
-    return Math.round(cartSubtotal * 0.05); // 5% service fee
+    return Math.round(cartSubtotal * 5) / 100; // 5% service fee (2dp, matches server pricing)
   }, [cartSubtotal]);
 
   const cartTotal = cartSubtotal + cartDeliveryFee + cartServiceFee;
 
-  // Order Placement (Firestore state machine)
+  // Order Placement: server-priced via the `placeOrder` Cloud Function, then payment is started.
+  // The client never writes 'paid'; the payment webhook (or emulator-only simulation) does, and the live order
+  // subscription reflects it.
   const placeOrder = async (fulfillmentMethod: 'delivery' | 'pickup'): Promise<Order> => {
     recordTap('Completed checkout & placed order');
-    const orderNum = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
-    const newOrder: Order = {
-      id: `ord_${Date.now()}`,
-      orderNumber: orderNum,
-      userId: userProfile.id,
-      customerName: userProfile.name,
-      customerPhone: userProfile.phone,
-      items: [...cartItems],
-      restaurantId: cartItems[0].restaurant.id,
-      restaurantName: cartItems[0].restaurant.name,
-      fulfillmentMethod,
-      deliveryAddress: currentLocation,
-      subtotal: cartSubtotal,
-      deliveryFee: cartDeliveryFee,
-      serviceFee: cartServiceFee,
-      total: cartTotal,
-      currency: currentLocation.currency,
-      status: 'payment_pending',
-      paymentStatus: 'pending',
-      createdAt: new Date().toISOString(),
-      estimatedDeliveryTime: '25-35 mins',
-      driverName: 'Emeka Nwosu (Courier)',
-      driverPhone: '+234 802 987 6543',
-      driverVehicle: 'Honda Motorcycle (PH-342-XY)',
-      tapCount,
-      courierMessages: [
-        {
-          id: 'msg_init',
-          sender: 'system',
-          text: 'Order placed securely in Firestore. Kitchen notified.',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
-      ]
-    };
+    if (!auth.currentUser) {
+      // Guests are demo-only: nothing is persisted, so we refuse explicitly instead of pretending it worked.
+      notify(GUEST_ORDER_MESSAGE, 'warning');
+      throw new OrderServiceError('guest', GUEST_ORDER_MESSAGE);
+    }
+    if (cartItems.length === 0) {
+      notify('Your cart is empty.', 'warning');
+      throw new OrderServiceError('invalid_state', 'Your cart is empty.');
+    }
 
-    // Save order in Firestore
-    await createOrderInFirestore(newOrder);
+    let newOrder: Order;
+    try {
+      const res = await placeOrderOnServer({
+        restaurantId: cartItems[0].restaurant.id,
+        items: cartToServerItems(cartItems),
+        fulfillmentMethod,
+        currency: currentLocation.currency,
+        deliveryAddress: currentLocation,
+        tapCount
+      });
+      newOrder = res.order;
+    } catch (err) {
+      const message = (err as { message?: string })?.message?.replace(/^.*?:\s*/, '') || 'Could not place your order.';
+      notify(message, 'error');
+      throw err;
+    }
 
-    // Record order analytics event
     logRecommendationEvent({
       userId: userProfile.id,
       restaurantId: newOrder.restaurantId,
@@ -618,24 +649,59 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       timestamp: new Date().toISOString()
     });
 
-    setOrders(prev => [newOrder, ...prev]);
+    setOrders(prev => [newOrder, ...prev.filter(o => o.id !== newOrder.id)]);
     setActiveOrder(newOrder);
     clearCart();
     setIsCheckoutOpen(false);
+
+    try {
+      const pay = await startPayment(newOrder.id);
+      if (pay.mode === 'redirect') {
+        window.location.assign(pay.authorizationUrl);
+      } else {
+        notify('Dev simulation: payment confirmed by the emulator function.', 'info');
+      }
+    } catch (err) {
+      const message = (err as { message?: string })?.message || 'Could not start payment.';
+      notify(`Order saved, but payment could not start: ${message}`, 'error');
+    }
     return newOrder;
   };
 
-  const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
+  const updateOrderStatus = async (orderId: string, status: OrderStatus): Promise<boolean> => {
     recordTap(`Updated order status to ${status}`);
-    await updateOrderStatusInFirestore(orderId, status);
+    try {
+      await updateOrderStatusInFirestore(orderId, status);
+      return true;
+    } catch (err) {
+      notify(orderErrorMessage(err), 'error');
+      return false;
+    }
+  };
+
+  const assignCourier = async (orderId: string, courierId: string): Promise<boolean> => {
+    recordTap('Assigned courier to order');
+    try {
+      await assignCourierInFirestore(orderId, courierId);
+      notify('Courier assigned.', 'success');
+      return true;
+    } catch (err) {
+      notify(orderErrorMessage(err), 'error');
+      return false;
+    }
   };
 
   const cancelActiveOrder = async (orderId: string) => {
     recordTap('Cancelled active order');
-    await updateOrderStatusInFirestore(orderId, 'cancelled');
+    try {
+      await updateOrderStatusInFirestore(orderId, 'cancelled');
+      notify('Order cancelled.', 'success');
+    } catch (err) {
+      notify(orderErrorMessage(err), 'error');
+    }
   };
 
-  const submitOrderRating = (orderId: string, foodRating: number, restaurantRating: number, deliveryRating: number, feedbackTags: string[]) => {
+  const submitOrderRating = async (orderId: string, foodRating: number, restaurantRating: number, deliveryRating: number, feedbackTags: string[]) => {
     recordTap('Submitted order rating feedback');
     const ratingObj = {
       foodRating,
@@ -644,8 +710,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       feedbackTags,
       timestamp: new Date().toISOString()
     };
-
     const targetOrder = orders.find(o => o.id === orderId);
+
+    try {
+      // Writes ONLY ratingSubmitted + updatedAt; status is never touched.
+      await submitOrderRatingInFirestore(orderId, ratingObj);
+    } catch (err) {
+      notify(orderErrorMessage(err), 'error');
+      return;
+    }
 
     logRecommendationEvent({
       userId: userProfile.id,
@@ -653,15 +726,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       eventType: 'rated',
       timestamp: new Date().toISOString()
     });
-
     logRecommendationEvent({
       userId: userProfile.id,
       restaurantId: targetOrder?.restaurantId,
       eventType: 'meal_rated',
       timestamp: new Date().toISOString()
     });
-
-    updateOrderStatusInFirestore(orderId, 'delivered', { ratingSubmitted: ratingObj });
   };
 
   // Merchant Actions
@@ -868,24 +938,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const closeRestaurantDetailsModal = closeRestaurantDetails;
 
-  const sendCourierMessage = (orderId: string, text: string) => {
+  const sendCourierMessage = async (orderId: string, text: string) => {
     if (!text.trim()) return;
     recordTap('Sent message to courier');
     const newMsg: CourierMessage = {
-      id: `msg_${Date.now()}`,
+      id: generateId('msg'),
       sender: 'customer',
       text: text.trim(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    setOrders(prev => prev.map(ord => {
-      if (ord.id === orderId) {
-        const msgs = [...(ord.courierMessages || []), newMsg];
-        updateOrderStatusInFirestore(orderId, ord.status, { courierMessages: msgs });
-        return { ...ord, courierMessages: msgs };
-      }
-      return ord;
-    }));
+    // Optimistic local update (pure state update; the Firestore write happens below, outside any updater).
+    setOrders(prev => prev.map(ord => ord.id === orderId ? { ...ord, courierMessages: [...(ord.courierMessages || []), newMsg] } : ord));
+    setActiveOrder(prev => prev && prev.id === orderId ? { ...prev, courierMessages: [...(prev.courierMessages || []), newMsg] } : prev);
+
+    if (!auth.currentUser) {
+      notify('Guest mode: this message is not saved or delivered.', 'info');
+      return;
+    }
+    try {
+      await appendCourierMessageInFirestore(orderId, newMsg);
+    } catch (err) {
+      notify(orderErrorMessage(err), 'error');
+    }
   };
 
   const merchantRestaurants = useMemo(() => {
@@ -964,6 +1039,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         submitOrderRating,
         cancelActiveOrder,
         updateOrderStatus,
+        assignCourier,
+        toasts,
+        showToast,
+        dismissToast,
         activeMerchantRestaurantId,
         setActiveMerchantRestaurantId,
         merchantRestaurants,

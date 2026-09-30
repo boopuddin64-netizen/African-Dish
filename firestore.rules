@@ -58,6 +58,7 @@ service cloud.firestore {
         (oldStatus == 'preparing' && newStatus in ['ready', 'cancelled']) ||
         (oldStatus == 'ready' && newStatus in ['out_for_delivery', 'delivered', 'cancelled']) ||
         (oldStatus == 'out_for_delivery' && newStatus in ['delivered', 'cancelled']) ||
+        (oldStatus == 'delivered' && newStatus in ['refunded']) ||
         (oldStatus == 'payment_failed' && newStatus in ['payment_pending', 'cancelled']) ||
         (oldStatus == 'rejected' && newStatus in ['refunded']) ||
         (oldStatus == 'cancelled' && newStatus in ['refunded']) ||

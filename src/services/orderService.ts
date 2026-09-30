@@ -4,14 +4,16 @@ import {
   setDoc, 
   getDoc,
   updateDoc, 
+  arrayUnion,
   onSnapshot, 
   query, 
-  where, 
-  orderBy 
+  where
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { Order, OrderStatus } from '../types';
+import { Order, OrderStatus, CourierMessage } from '../types';
 import { handleFirestoreError } from '../lib/errorHandling';
+import { generateId } from '../lib/ids';
+import { VALID_ORDER_TRANSITIONS, isValidOrderStatusTransition } from '../lib/orderStateMachine';
 
 export const ORDERS_COLLECTION = 'orders';
 
@@ -30,7 +32,7 @@ export function calculateAuthoritativeOrderTotal(order: Order): {
   }, 0);
 
   const deliveryFee = order.deliveryFee || 0;
-  const serviceFee = order.serviceFee || Math.round(recalculatedSubtotal * 0.05);
+  const serviceFee = order.serviceFee || Math.round(recalculatedSubtotal * 5) / 100;
   const total = recalculatedSubtotal + deliveryFee + serviceFee;
 
   return {
@@ -41,20 +43,36 @@ export function calculateAuthoritativeOrderTotal(order: Order): {
   };
 }
 
+/** Thrown for problems we detect ourselves (guest mode, invalid transition, missing order); message is user-facing. */
+export class OrderServiceError extends Error {
+  constructor(public code: 'guest' | 'invalid_transition' | 'not_found' | 'forbidden_client_transition' | 'invalid_state', message: string) {
+    super(message);
+    this.name = 'OrderServiceError';
+  }
+}
+
+export const GUEST_ORDER_MESSAGE =
+  'Please sign in to place an order. Guest sessions are demo-only and orders are not saved.';
+
 /**
- * Creates a new order in Firestore with initial state 'payment_pending'.
+ * Writes a client-side DRAFT order (status payment_pending / paymentStatus pending) with a collision-resistant id.
+ * Drafts are NOT payable: only orders created by the `placeOrder` Cloud Function carry `serverPriced: true`, and the
+ * payment webhook refuses everything else. Prefer `placeOrderOnServer` (paymentService) for real checkouts.
+ *
+ * Guests (no Firebase Auth user) are rejected explicitly instead of silently "succeeding".
  */
 export async function createOrderInFirestore(order: Order): Promise<string> {
   if (!auth.currentUser || auth.currentUser.uid !== order.userId) {
-    console.log('User is in guest mode or unauthenticated. Order created in local session state.');
-    return order.id;
+    throw new OrderServiceError('guest', GUEST_ORDER_MESSAGE);
   }
 
   try {
     const totals = calculateAuthoritativeOrderTotal(order);
-    const ref = doc(db, ORDERS_COLLECTION, order.id);
+    const id = order.id || generateId('ord');
+    const ref = doc(db, ORDERS_COLLECTION, id);
     await setDoc(ref, {
       ...order,
+      id,
       subtotal: totals.subtotal,
       serviceFee: totals.serviceFee,
       total: totals.total,
@@ -62,76 +80,106 @@ export async function createOrderInFirestore(order: Order): Promise<string> {
       paymentStatus: order.paymentStatus || 'pending',
       createdAt: order.createdAt || new Date().toISOString()
     });
-    return order.id;
+    return id;
   } catch (err) {
-    handleFirestoreError(err, { operation: 'create', path: `${ORDERS_COLLECTION}/${order.id}` });
+    handleFirestoreError(err, { operation: 'create', path: `${ORDERS_COLLECTION}/${order.id}` }, { silent: true });
     throw err;
   }
 }
 
-export const VALID_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  cart: ['checkout', 'payment_pending', 'cancelled'],
-  checkout: ['payment_pending', 'cancelled'],
-  payment_pending: ['paid', 'payment_failed', 'cancelled'],
-  paid: ['restaurant_pending', 'accepted', 'rejected', 'cancelled'],
-  restaurant_pending: ['accepted', 'rejected', 'cancelled'],
-  accepted: ['preparing', 'cancelled'],
-  preparing: ['ready', 'cancelled'],
-  ready: ['out_for_delivery', 'delivered', 'cancelled'],
-  out_for_delivery: ['delivered', 'cancelled'],
-  delivered: [],
-  payment_failed: ['payment_pending', 'cancelled'],
-  rejected: ['refunded'],
-  cancelled: ['refunded'],
-  refunded: [],
-  confirmed: ['preparing', 'out_for_delivery', 'delivered'],
-  on_the_way: ['delivered']
-};
-
-export function isValidOrderStatusTransition(currentStatus: OrderStatus, nextStatus: OrderStatus): boolean {
-  if (currentStatus === nextStatus) return true;
-  const allowed = VALID_ORDER_TRANSITIONS[currentStatus];
-  return allowed ? allowed.includes(nextStatus) : true;
-}
+export { VALID_ORDER_TRANSITIONS, isValidOrderStatusTransition };
 
 /**
- * Updates order state in Firestore with authoritative state transition rules.
+ * Updates an order's status with client-side state-machine validation.
+ * - Never writes on an invalid transition (throws OrderServiceError).
+ * - Never creates a missing document (uses updateDoc, not setDoc/merge).
+ * - Propagates every error to the caller so the UI can display it.
+ * - Never sets paid / restaurant_pending: those are set only by the trusted payment webhook.
  */
 export async function updateOrderStatusInFirestore(
-  orderId: string, 
-  newStatus: OrderStatus, 
+  orderId: string,
+  newStatus: OrderStatus,
   extraUpdates?: Partial<Order>
 ): Promise<void> {
   if (!auth.currentUser) {
-    console.log('User is unauthenticated. Order status updated in local state.');
-    return;
+    throw new OrderServiceError('guest', 'Please sign in to update orders.');
+  }
+  if (newStatus === 'paid' || newStatus === 'restaurant_pending') {
+    throw new OrderServiceError(
+      'forbidden_client_transition',
+      'Payment confirmation is handled securely by the server; the app cannot mark an order as paid.'
+    );
   }
 
+  const ref = doc(db, ORDERS_COLLECTION, orderId);
   try {
-    const ref = doc(db, ORDERS_COLLECTION, orderId);
-    
-    // Check transition validity if document exists
     const snap = await getDoc(ref);
-    if (snap.exists()) {
-      const currentOrder = snap.data() as Order;
-      if (!isValidOrderStatusTransition(currentOrder.status, newStatus)) {
-        console.warn(`Invalid order state transition attempted: ${currentOrder.status} -> ${newStatus}`);
-      }
+    if (!snap.exists()) {
+      throw new OrderServiceError('not_found', 'This order no longer exists.');
+    }
+    const currentStatus = (snap.data() as Order).status;
+    if (!isValidOrderStatusTransition(currentStatus, newStatus)) {
+      throw new OrderServiceError('invalid_transition', `Can't change an order from "${currentStatus}" to "${newStatus}".`);
     }
 
-    const paymentStatusUpdate = 
-      newStatus === 'paid' ? 'paid' :
+    const paymentStatusUpdate =
       newStatus === 'payment_failed' ? 'failed' :
       newStatus === 'refunded' ? 'refunded' : undefined;
 
-    await setDoc(ref, {
+    await updateDoc(ref, {
       status: newStatus,
       ...(paymentStatusUpdate ? { paymentStatus: paymentStatusUpdate } : {}),
       updatedAt: new Date().toISOString(),
       ...extraUpdates
-    }, { merge: true });
+    });
   } catch (err) {
-    handleFirestoreError(err, { operation: 'update', path: `${ORDERS_COLLECTION}/${orderId}` });
+    if (!(err instanceof OrderServiceError)) {
+      handleFirestoreError(err, { operation: 'update', path: `${ORDERS_COLLECTION}/${orderId}` }, { silent: true });
+    }
+    throw err;
+  }
+}
+
+/** Customer rating: writes ONLY ratingSubmitted + updatedAt (status is untouched; rules allow nothing else). */
+export async function submitOrderRatingInFirestore(orderId: string, rating: NonNullable<Order['ratingSubmitted']>): Promise<void> {
+  if (!auth.currentUser) throw new OrderServiceError('guest', 'Please sign in to rate an order.');
+  try {
+    await updateDoc(doc(db, ORDERS_COLLECTION, orderId), {
+      ratingSubmitted: rating,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    handleFirestoreError(err, { operation: 'update', path: `${ORDERS_COLLECTION}/${orderId}` }, { silent: true });
+    throw err;
+  }
+}
+
+/** Appends one chat message (atomic arrayUnion; no read-modify-write race). */
+export async function appendCourierMessageInFirestore(orderId: string, message: CourierMessage): Promise<void> {
+  if (!auth.currentUser) throw new OrderServiceError('guest', 'Please sign in to send messages.');
+  try {
+    await updateDoc(doc(db, ORDERS_COLLECTION, orderId), {
+      courierMessages: arrayUnion(message),
+      updatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    handleFirestoreError(err, { operation: 'update', path: `${ORDERS_COLLECTION}/${orderId}` }, { silent: true });
+    throw err;
+  }
+}
+
+/** Restaurant staff: assign a courier (rules verify the uid really has the courier role). */
+export async function assignCourierInFirestore(orderId: string, courierId: string): Promise<void> {
+  if (!auth.currentUser) throw new OrderServiceError('guest', 'Please sign in to assign couriers.');
+  if (!courierId.trim()) throw new OrderServiceError('invalid_state', 'Enter a courier ID first.');
+  try {
+    await updateDoc(doc(db, ORDERS_COLLECTION, orderId), {
+      courierId: courierId.trim(),
+      updatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    handleFirestoreError(err, { operation: 'update', path: `${ORDERS_COLLECTION}/${orderId}` }, { silent: true });
+    throw err;
   }
 }
 

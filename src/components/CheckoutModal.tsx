@@ -36,13 +36,16 @@ export const CheckoutModal: React.FC = () => {
 
   if (!isCheckoutOpen) return null;
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     setIsSubmitting(true);
     recordTap('Submitted Final Order Confirmation');
-    setTimeout(() => {
-      placeOrder(fulfillmentMethod);
+    try {
+      await placeOrder(fulfillmentMethod);
+    } catch {
+      // placeOrder already surfaced a toast explaining what went wrong (guest, validation, server error)
+    } finally {
       setIsSubmitting(false);
-    }, 600);
+    }
   };
 
   const finalTotal = fulfillmentMethod === 'delivery' ? cartTotal : (cartSubtotal + cartServiceFee);

@@ -39,6 +39,7 @@ export const MerchantDashboard: React.FC = () => {
     toggleOrderAcceptanceMode,
     updateRestaurantDetails,
     updateOrderStatus,
+    assignCourier,
     orders,
     currentLocation,
     recordTap
@@ -48,6 +49,7 @@ export const MerchantDashboard: React.FC = () => {
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'low_stock' | 'out_of_stock'>('all');
   const [kitchenAlertSound, setKitchenAlertSound] = useState(true);
   const [stockSuccessMessage, setStockSuccessMessage] = useState<string | null>(null);
+  const [courierInputs, setCourierInputs] = useState<Record<string, string>>({});
 
   const activeRestaurant = merchantRestaurants.find(r => r.id === activeMerchantRestaurantId) || merchantRestaurants[0];
   const restaurantMeals = allMeals.filter(m => m.restaurantId === activeRestaurant.id);
@@ -582,7 +584,7 @@ export const MerchantDashboard: React.FC = () => {
                   <span className={`px-3 py-1 rounded-full font-extrabold text-xs capitalize ${
                     order.status === 'delivered'
                       ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                      : order.status === 'on_the_way'
+                      : (order.status === 'on_the_way' || order.status === 'out_for_delivery')
                       ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
                       : order.status === 'ready'
                       ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
@@ -650,11 +652,32 @@ export const MerchantDashboard: React.FC = () => {
 
                 {/* Kitchen Status Progression Workflow */}
                 <div className="pt-2 flex items-center gap-2 flex-wrap">
-                  {order.status === 'confirmed' && (
+                  {(order.status === 'paid' || order.status === 'restaurant_pending' || order.status === 'confirmed') && (
+                    <>
+                      <button
+                        onClick={async () => {
+                          if (await updateOrderStatus(order.id, 'accepted')) showFeedback(`Order #${order.orderNumber} ACCEPTED`);
+                        }}
+                        className="px-4 py-2 rounded-xl bg-[#5F765A] hover:bg-[#4E624A] text-white text-xs font-black flex items-center gap-1.5 transition-colors"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Accept Order</span>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (await updateOrderStatus(order.id, 'rejected')) showFeedback(`Order #${order.orderNumber} rejected`);
+                        }}
+                        className="px-4 py-2 rounded-xl border border-red-300 text-red-700 dark:text-red-400 text-xs font-black transition-colors"
+                      >
+                        Reject
+                      </button>
+                    </>
+                  )}
+
+                  {order.status === 'accepted' && (
                     <button
-                      onClick={() => {
-                        updateOrderStatus(order.id, 'preparing');
-                        showFeedback(`Order #${order.orderNumber} marked as PREPARING in kitchen`);
+                      onClick={async () => {
+                        if (await updateOrderStatus(order.id, 'preparing')) showFeedback(`Order #${order.orderNumber} marked as PREPARING in kitchen`);
                       }}
                       className="px-4 py-2 rounded-xl bg-[#5F765A] hover:bg-[#4E624A] text-white text-xs font-black flex items-center gap-1.5 transition-colors"
                     >
@@ -665,9 +688,8 @@ export const MerchantDashboard: React.FC = () => {
 
                   {order.status === 'preparing' && (
                     <button
-                      onClick={() => {
-                        updateOrderStatus(order.id, 'ready');
-                        showFeedback(`Order #${order.orderNumber} marked READY for Courier Pickup`);
+                      onClick={async () => {
+                        if (await updateOrderStatus(order.id, 'ready')) showFeedback(`Order #${order.orderNumber} marked READY for Courier Pickup`);
                       }}
                       className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black flex items-center gap-1.5 transition-colors"
                     >
@@ -676,30 +698,33 @@ export const MerchantDashboard: React.FC = () => {
                     </button>
                   )}
 
-                  {order.status === 'ready' && (
-                    <button
-                      onClick={() => {
-                        updateOrderStatus(order.id, 'on_the_way');
-                        showFeedback(`Order #${order.orderNumber} handed to Courier ${order.driverName || 'Rider'}`);
-                      }}
-                      className="px-4 py-2 rounded-xl bg-[#241A17] dark:bg-stone-700 text-white text-xs font-black flex items-center gap-1.5 transition-colors"
-                    >
-                      <Truck className="w-3.5 h-3.5" />
-                      <span>Handed to Courier</span>
-                    </button>
+                  {/* Courier assignment (rules verify the uid is a real courier). Handover itself is done by the courier. */}
+                  {order.fulfillmentMethod === 'delivery' && ['accepted', 'preparing', 'ready'].includes(order.status) && (
+                    <div className="flex items-center gap-1.5">
+                      <label htmlFor={`courier-id-${order.id}`} className="sr-only">Courier user ID</label>
+                      <input
+                        id={`courier-id-${order.id}`}
+                        value={courierInputs[order.id] ?? order.courierId ?? ''}
+                        onChange={(e) => setCourierInputs(prev => ({ ...prev, [order.id]: e.target.value }))}
+                        placeholder="Courier user ID"
+                        className="px-3 py-2 rounded-xl border border-[#EAE4DC] dark:border-stone-700 bg-white dark:bg-stone-900 text-xs w-40"
+                      />
+                      <button
+                        onClick={async () => {
+                          await assignCourier(order.id, courierInputs[order.id] ?? order.courierId ?? '');
+                        }}
+                        className="px-3 py-2 rounded-xl bg-[#241A17] dark:bg-stone-700 text-white text-xs font-black flex items-center gap-1.5 transition-colors"
+                      >
+                        <Truck className="w-3.5 h-3.5" />
+                        <span>{order.courierId ? 'Reassign' : 'Assign courier'}</span>
+                      </button>
+                    </div>
                   )}
 
-                  {order.status === 'on_the_way' && (
-                    <button
-                      onClick={() => {
-                        updateOrderStatus(order.id, 'delivered');
-                        showFeedback(`Order #${order.orderNumber} completed`);
-                      }}
-                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center gap-1.5 transition-colors"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Mark Delivered</span>
-                    </button>
+                  {(order.status === 'ready' || order.status === 'out_for_delivery') && (
+                    <span className="text-[11px] text-[#807872] dark:text-stone-400">
+                      {order.status === 'ready' ? 'Waiting for courier pickup' : 'Out for delivery'}
+                    </span>
                   )}
                 </div>
               </div>
