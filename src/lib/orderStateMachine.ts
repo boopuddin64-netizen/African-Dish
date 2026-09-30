@@ -37,6 +37,11 @@ export const ACTOR_TARGET_STATUSES: Record<OrderActor, OrderStatus[] | 'any'> = 
   admin: 'any'
 };
 
+/** A customer may cancel only before the kitchen has accepted the order (afterwards: restaurant / admin / refund). */
+export const CUSTOMER_CANCELLABLE_FROM: OrderStatus[] = [
+  'cart', 'checkout', 'payment_pending', 'payment_failed', 'paid', 'restaurant_pending', 'cancelled'
+];
+
 export function isValidOrderStatusTransition(currentStatus: OrderStatus, nextStatus: OrderStatus): boolean {
   if (currentStatus === nextStatus) return true;
   const allowed = VALID_ORDER_TRANSITIONS[currentStatus];
@@ -44,9 +49,14 @@ export function isValidOrderStatusTransition(currentStatus: OrderStatus, nextSta
   return allowed ? allowed.includes(nextStatus) : false;
 }
 
-/** Can `actor` move an order from `from` to `to`? (state machine AND actor permission; UI helper + test oracle.) */
+/**
+ * Can `actor` move an order from `from` to `to`? = state machine AND per-actor permission.
+ * Used by the UI to decide which buttons to show and by roleFlow.test.ts as the oracle for the Firestore rules.
+ */
 export function canActorTransition(actor: OrderActor, from: OrderStatus, to: OrderStatus): boolean {
   if (!isValidOrderStatusTransition(from, to)) return false;
+  if (from === to) return true;
+  if (actor === 'customer' && to === 'cancelled' && !CUSTOMER_CANCELLABLE_FROM.includes(from)) return false;
   const targets = ACTOR_TARGET_STATUSES[actor];
-  return targets === 'any' || targets.includes(to) || from === to;
+  return targets === 'any' || targets.includes(to);
 }
