@@ -17,6 +17,7 @@ import {
   Star
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useEscapeKey } from '../lib/useEscapeKey';
 
 interface RestaurantDetailsModalProps {
   restaurant: Restaurant | null;
@@ -31,6 +32,7 @@ export const RestaurantDetailsModal: React.FC<RestaurantDetailsModalProps> = ({
 }) => {
   const { currentLocation, allMeals, setSelectedMeal, recordTap } = useApp();
 
+  useEscapeKey(isOpen && Boolean(restaurant), onClose);
   if (!isOpen || !restaurant) return null;
 
   const restaurantMeals = allMeals.filter(m => m.restaurantId === restaurant.id);
@@ -44,6 +46,9 @@ export const RestaurantDetailsModal: React.FC<RestaurantDetailsModalProps> = ({
     >
       <div 
         id="restaurant-details-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Restaurant details"
         onClick={(e) => e.stopPropagation()}
         className="bg-white dark:bg-[#1E1B18] w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl border border-[#EAE4DC] dark:border-stone-800 flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
       >
@@ -53,12 +58,14 @@ export const RestaurantDetailsModal: React.FC<RestaurantDetailsModalProps> = ({
             src={restaurant.image} 
             alt={restaurant.name}
             referrerPolicy="no-referrer"
+                      loading="lazy"
+                      decoding="async"
             className="w-full h-full object-cover opacity-85"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
 
           {/* Close button */}
-          <button
+          <button aria-label="Close restaurant details"
             onClick={onClose}
             className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/50 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-xs transition-colors"
           >
@@ -73,6 +80,8 @@ export const RestaurantDetailsModal: React.FC<RestaurantDetailsModalProps> = ({
                   src={restaurant.logo} 
                   alt={restaurant.name}
                   referrerPolicy="no-referrer"
+                      loading="lazy"
+                      decoding="async"
                   className="w-full h-full object-cover rounded-xl"
                 />
               </div>
@@ -229,6 +238,8 @@ export const RestaurantDetailsModal: React.FC<RestaurantDetailsModalProps> = ({
                       src={meal.image} 
                       alt={meal.name}
                       referrerPolicy="no-referrer"
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
                   </div>

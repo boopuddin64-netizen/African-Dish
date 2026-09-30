@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useEscapeKey } from '../lib/useEscapeKey';
 import { 
   X, 
   Send, 
@@ -25,6 +26,7 @@ export const LiveCourierChatModal: React.FC<LiveCourierChatModalProps> = ({ orde
   const [inputText, setInputText] = useState('');
   const [callActive, setCallActive] = useState(false);
 
+  useEscapeKey(isOpen, onClose);
   if (!isOpen) return null;
 
   const handleSend = (e: React.FormEvent) => {
@@ -63,6 +65,9 @@ export const LiveCourierChatModal: React.FC<LiveCourierChatModalProps> = ({ orde
     >
       <div 
         id="live-courier-chat-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Live courier chat"
         className="bg-white dark:bg-[#1E1B18] w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl border border-[#EAE4DC] dark:border-stone-800 flex flex-col h-[600px] max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
       >
         {/* Header */}
@@ -94,7 +99,7 @@ export const LiveCourierChatModal: React.FC<LiveCourierChatModalProps> = ({ orde
 
           <div className="flex items-center gap-1.5">
             {/* Direct Call Button */}
-            <button
+            <button aria-label="Call delivery partner"
               onClick={() => {
                 recordTap('Triggered simulated courier call');
                 setCallActive(true);
@@ -110,7 +115,7 @@ export const LiveCourierChatModal: React.FC<LiveCourierChatModalProps> = ({ orde
               <Phone className="w-4 h-4" />
             </button>
 
-            <button
+            <button aria-label="Close chat"
               onClick={onClose}
               className="w-8 h-8 rounded-full hover:bg-white dark:hover:bg-stone-800 flex items-center justify-center text-[#807872] dark:text-stone-400 transition-colors"
             >
@@ -199,7 +204,7 @@ export const LiveCourierChatModal: React.FC<LiveCourierChatModalProps> = ({ orde
             placeholder="Message your courier directly..."
             className="flex-1 px-4 py-2.5 rounded-full bg-[#FAF7F0] dark:bg-stone-900 border border-[#EAE4DC] dark:border-stone-700 text-xs text-[#241A17] dark:text-stone-100 focus:outline-none focus:border-[#C85C43]"
           />
-          <button
+          <button aria-label="Send message"
             type="submit"
             disabled={!inputText.trim()}
             className="p-2.5 rounded-full bg-[#C85C43] hover:bg-[#B44F37] disabled:opacity-40 text-white transition-colors shadow-xs"

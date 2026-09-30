@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { useEscapeKey } from '../lib/useEscapeKey';
 import { 
   X, 
   CheckCircle2, 
@@ -40,6 +41,7 @@ export const OrderTrackingModal: React.FC = () => {
     setFeedbackSubmitted(false);
   }, [activeOrder?.id]);
 
+  useEscapeKey(Boolean(activeOrder) && !isChatOpen, () => setActiveOrder(null));
   if (!activeOrder) return null;
 
   const quickFeedbackOptions = [
@@ -88,6 +90,9 @@ export const OrderTrackingModal: React.FC = () => {
     >
       <div 
         id="order-tracking-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Order tracking"
         className="bg-white dark:bg-[#1E1B18] w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl border border-[#EAE4DC] dark:border-stone-800 flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150"
       >
         {/* Header */}
@@ -103,7 +108,7 @@ export const OrderTrackingModal: React.FC = () => {
             </h2>
           </div>
 
-          <button
+          <button aria-label="Close order tracking"
             onClick={() => setActiveOrder(null)}
             className="w-8 h-8 rounded-full hover:bg-white dark:hover:bg-stone-800 flex items-center justify-center text-[#807872] dark:text-stone-400"
           >

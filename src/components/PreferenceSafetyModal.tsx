@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useEscapeKey } from '../lib/useEscapeKey';
 import { 
   X, 
   ShieldCheck, 
@@ -30,6 +31,7 @@ export const PreferenceSafetyModal: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'safety' | 'cuisines' | 'spice' | 'dietary'>('safety');
 
+  useEscapeKey(isPreferenceModalOpen, () => setIsPreferenceModalOpen(false));
   if (!isPreferenceModalOpen) return null;
 
   const allAllergens: { id: Allergen; label: string; desc: string }[] = [
@@ -71,6 +73,9 @@ export const PreferenceSafetyModal: React.FC = () => {
     >
       <div 
         id="preferences-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Preferences and safety"
         onClick={(e) => e.stopPropagation()}
         className="bg-white dark:bg-[#1E1B18] w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl border border-[#EAE4DC] dark:border-stone-800 flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150"
       >
@@ -90,7 +95,7 @@ export const PreferenceSafetyModal: React.FC = () => {
             </div>
           </div>
 
-          <button
+          <button aria-label="Close preferences"
             onClick={() => setIsPreferenceModalOpen(false)}
             className="w-8 h-8 rounded-full hover:bg-white dark:hover:bg-stone-800 flex items-center justify-center text-[#807872] dark:text-stone-400"
           >

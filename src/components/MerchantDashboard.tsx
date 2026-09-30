@@ -101,6 +101,8 @@ export const MerchantDashboard: React.FC = () => {
               src={activeRestaurant.logo} 
               alt={activeRestaurant.name}
               referrerPolicy="no-referrer"
+                      loading="lazy"
+                      decoding="async"
               className="w-full h-full object-cover" 
             />
           </div>
@@ -121,7 +123,7 @@ export const MerchantDashboard: React.FC = () => {
 
         {/* Restaurant selector dropdown */}
         <div className="flex items-center gap-2 self-start md:self-auto">
-          <label className="text-xs text-[#807872] dark:text-stone-400 font-semibold">Active Kitchen:</label>
+          <label className="text-xs text-[#807872] dark:text-stone-400 font-semibold" htmlFor="merchant-restaurant-select">Active Kitchen:</label>
           <select
             id="merchant-restaurant-select"
             value={activeMerchantRestaurantId}
@@ -186,7 +188,7 @@ export const MerchantDashboard: React.FC = () => {
               Rush Mode
             </button>
 
-            <button
+            <button aria-label="Toggle store open or closed"
               onClick={() => {
                 toggleRestaurantOpenStatus(activeRestaurant.id);
                 showFeedback(activeRestaurant.isOpen ? 'Kitchen marked as Closed' : 'Kitchen opened for live orders');
@@ -417,6 +419,8 @@ export const MerchantDashboard: React.FC = () => {
                         src={meal.image}
                         alt={meal.name}
                         referrerPolicy="no-referrer"
+                      loading="lazy"
+                      decoding="async"
                         className={`w-full h-full object-cover ${isDepleted ? 'grayscale opacity-75' : ''}`}
                       />
                       {isDepleted && (
@@ -466,7 +470,7 @@ export const MerchantDashboard: React.FC = () => {
                   <div className="mt-4 pt-3 border-t border-[#F0EAE1] dark:border-stone-800 flex items-center justify-between gap-2 flex-wrap text-xs">
                     {/* Incremental Controls */}
                     <div className="flex items-center gap-1 bg-[#FAF7F0] dark:bg-stone-900 p-1 rounded-xl border border-[#EAE4DC] dark:border-stone-700">
-                      <button
+                      <button aria-label="Reduce stock by one portion"
                         onClick={() => {
                           updateMealStock(meal.id, -1);
                         }}
@@ -481,7 +485,7 @@ export const MerchantDashboard: React.FC = () => {
                         {stock}
                       </span>
 
-                      <button
+                      <button aria-label="Add one portion to stock"
                         onClick={() => {
                           updateMealStock(meal.id, 1);
                         }}
@@ -758,8 +762,8 @@ export const MerchantDashboard: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div className="space-y-1">
-                <label className="font-bold text-[#241A17] dark:text-stone-200">Operating Hours</label>
-                <input
+                <label className="font-bold text-[#241A17] dark:text-stone-200" htmlFor="merchantdashboard-operating-hours-2">Operating Hours</label>
+                <input id="merchantdashboard-operating-hours-2"
                   type="text"
                   value={activeRestaurant.operatingHours}
                   onChange={(e) => updateRestaurantDetails(activeRestaurant.id, { operatingHours: e.target.value })}
@@ -768,8 +772,8 @@ export const MerchantDashboard: React.FC = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-[#241A17] dark:text-stone-200">Kitchen Contact Phone</label>
-                <input
+                <label className="font-bold text-[#241A17] dark:text-stone-200" htmlFor="merchantdashboard-kitchen-contact-phone-3">Kitchen Contact Phone</label>
+                <input id="merchantdashboard-kitchen-contact-phone-3"
                   type="text"
                   value={activeRestaurant.phone || '+234 800 123 4567'}
                   onChange={(e) => updateRestaurantDetails(activeRestaurant.id, { phone: e.target.value })}
@@ -812,8 +816,8 @@ export const MerchantDashboard: React.FC = () => {
               </div>
 
               <div className="sm:col-span-2 space-y-1">
-                <label className="font-bold text-[#241A17] dark:text-stone-200">Food Hygiene & Safety Certification</label>
-                <input
+                <label className="font-bold text-[#241A17] dark:text-stone-200" htmlFor="merchantdashboard-food-hygiene-safety-cert-4">Food Hygiene & Safety Certification</label>
+                <input id="merchantdashboard-food-hygiene-safety-cert-4"
                   type="text"
                   value={activeRestaurant.hygieneRating || 'Rivers State Certified Clean Kitchen (Grade A)'}
                   onChange={(e) => updateRestaurantDetails(activeRestaurant.id, { hygieneRating: e.target.value })}
@@ -822,8 +826,8 @@ export const MerchantDashboard: React.FC = () => {
               </div>
 
               <div className="sm:col-span-2 space-y-1">
-                <label className="font-bold text-[#241A17] dark:text-stone-200">Allergen Segregation Pledge</label>
-                <textarea
+                <label className="font-bold text-[#241A17] dark:text-stone-200" htmlFor="merchantdashboard-allergen-segregation-ple-5">Allergen Segregation Pledge</label>
+                <textarea id="merchantdashboard-allergen-segregation-ple-5"
                   rows={2}
                   value={activeRestaurant.allergenPledge || 'Separate grill stations for fish and nuts. Fresh palm oil batch every morning.'}
                   onChange={(e) => updateRestaurantDetails(activeRestaurant.id, { allergenPledge: e.target.value })}

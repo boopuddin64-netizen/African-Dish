@@ -210,7 +210,7 @@ export const CourierProfileView: React.FC = () => {
             <span>Go to Dispatch Queue</span>
           </button>
 
-          <button
+          <button aria-label="Edit rider details"
             onClick={() => setIsEditingRider(!isEditingRider)}
             className="px-3.5 py-2.5 rounded-full border border-[#EAE4DC] dark:border-stone-700 bg-[#FAF7F0] dark:bg-stone-800 text-[#241A17] dark:text-stone-200 text-xs font-bold hover:border-[#C85C43]/50 transition-colors"
           >
@@ -236,8 +236,8 @@ export const CourierProfileView: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div>
-              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Rider Full Name</label>
-              <input
+              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="courierprofileview-rider-full-name-1">Rider Full Name</label>
+              <input id="courierprofileview-rider-full-name-1"
                 type="text"
                 value={riderName}
                 onChange={e => setRiderName(e.target.value)}
@@ -247,8 +247,8 @@ export const CourierProfileView: React.FC = () => {
             </div>
 
             <div>
-              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Mobile Phone Number</label>
-              <input
+              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="courierprofileview-mobile-phone-number-2">Mobile Phone Number</label>
+              <input id="courierprofileview-mobile-phone-number-2"
                 type="text"
                 value={riderPhone}
                 onChange={e => setRiderPhone(e.target.value)}
@@ -258,8 +258,8 @@ export const CourierProfileView: React.FC = () => {
             </div>
 
             <div>
-              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Vehicle Make & Model</label>
-              <input
+              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="courierprofileview-vehicle-make-model-3">Vehicle Make & Model</label>
+              <input id="courierprofileview-vehicle-make-model-3"
                 type="text"
                 value={vehicleModel}
                 onChange={e => setVehicleModel(e.target.value)}
@@ -269,8 +269,8 @@ export const CourierProfileView: React.FC = () => {
             </div>
 
             <div>
-              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Vehicle License Plate</label>
-              <input
+              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="courierprofileview-vehicle-license-plate-4">Vehicle License Plate</label>
+              <input id="courierprofileview-vehicle-license-plate-4"
                 type="text"
                 value={plateNumber}
                 onChange={e => setPlateNumber(e.target.value)}
@@ -280,8 +280,8 @@ export const CourierProfileView: React.FC = () => {
             </div>
 
             <div>
-              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Driver's License Number</label>
-              <input
+              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="courierprofileview-driver-s-license-number-5">Driver's License Number</label>
+              <input id="courierprofileview-driver-s-license-number-5"
                 type="text"
                 value={licenseNumber}
                 onChange={e => setLicenseNumber(e.target.value)}
@@ -291,8 +291,8 @@ export const CourierProfileView: React.FC = () => {
             </div>
 
             <div>
-              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Active Service Zone</label>
-              <input
+              <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="courierprofileview-active-service-zone-6">Active Service Zone</label>
+              <input id="courierprofileview-active-service-zone-6"
                 type="text"
                 value={activeZone}
                 onChange={e => setActiveZone(e.target.value)}
@@ -496,8 +496,8 @@ export const CourierProfileView: React.FC = () => {
             {isEditingBank ? (
               <form onSubmit={handleSaveBankInfo} className="p-4 rounded-2xl bg-[#FAF7F0] dark:bg-stone-900 space-y-3 text-xs">
                 <div>
-                  <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Bank Name</label>
-                  <input
+                  <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="courierprofileview-bank-name-7">Bank Name</label>
+                  <input id="courierprofileview-bank-name-7"
                     type="text"
                     value={bankName}
                     onChange={e => setBankName(e.target.value)}
@@ -506,8 +506,8 @@ export const CourierProfileView: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Account Number</label>
-                  <input
+                  <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="courierprofileview-account-number-8">Account Number</label>
+                  <input id="courierprofileview-account-number-8"
                     type="text"
                     value={accountNumber}
                     onChange={e => setAccountNumber(e.target.value)}
@@ -516,8 +516,8 @@ export const CourierProfileView: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1">Account Name</label>
-                  <input
+                  <label className="font-bold text-[#807872] dark:text-stone-400 block mb-1" htmlFor="courierprofileview-account-name-9">Account Name</label>
+                  <input id="courierprofileview-account-name-9"
                     type="text"
                     value={accountName}
                     onChange={e => setAccountName(e.target.value)}

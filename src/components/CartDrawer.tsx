@@ -1,5 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import { useEscapeKey } from '../lib/useEscapeKey';
 import { 
   X, 
   Trash2, 
@@ -28,6 +29,7 @@ export const CartDrawer: React.FC = () => {
     recordTap
   } = useApp();
 
+  useEscapeKey(isCartOpen, () => setIsCartOpen(false));
   if (!isCartOpen) return null;
 
   const handleProceedToCheckout = () => {
@@ -44,6 +46,9 @@ export const CartDrawer: React.FC = () => {
     >
       <div 
         id="cart-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Shopping cart"
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md bg-white dark:bg-[#1E1B18] h-full shadow-2xl flex flex-col justify-between border-l border-[#EAE4DC] dark:border-stone-800 animate-in slide-in-from-right duration-200"
       >
@@ -59,7 +64,7 @@ export const CartDrawer: React.FC = () => {
             </div>
           </div>
 
-          <button
+          <button aria-label="Close cart"
             onClick={() => setIsCartOpen(false)}
             className="w-8 h-8 rounded-full hover:bg-[#FAF7F0] dark:hover:bg-stone-800 flex items-center justify-center text-[#807872] dark:text-stone-400 transition-colors"
           >
@@ -80,6 +85,8 @@ export const CartDrawer: React.FC = () => {
                     src={item.meal.image}
                     alt={item.meal.name}
                     referrerPolicy="no-referrer"
+                      loading="lazy"
+                      decoding="async"
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -105,7 +112,7 @@ export const CartDrawer: React.FC = () => {
 
                   <div className="mt-2 flex items-center justify-between">
                     <div className="flex items-center gap-1.5 bg-white dark:bg-stone-800 rounded-full p-0.5 border border-[#EAE4DC] dark:border-stone-700">
-                      <button
+                      <button aria-label="Decrease quantity"
                         onClick={() => updateCartQuantity(item.id, -1)}
                         className="w-5 h-5 rounded-full flex items-center justify-center text-[#807872] dark:text-stone-400 hover:bg-[#FAF7F0] dark:hover:bg-stone-700"
                       >
@@ -114,7 +121,7 @@ export const CartDrawer: React.FC = () => {
                       <span className="w-4 text-center font-bold text-[#241A17] dark:text-stone-100 text-[11px]">
                         {item.quantity}
                       </span>
-                      <button
+                      <button aria-label="Increase quantity"
                         onClick={() => updateCartQuantity(item.id, 1)}
                         className="w-5 h-5 rounded-full flex items-center justify-center text-[#807872] dark:text-stone-400 hover:bg-[#FAF7F0] dark:hover:bg-stone-700"
                       >
@@ -130,7 +137,7 @@ export const CartDrawer: React.FC = () => {
                   </div>
                 </div>
 
-                <button
+                <button aria-label="Remove item from cart"
                   onClick={() => removeFromCart(item.id)}
                   className="text-[#807872] dark:text-stone-400 hover:text-red-600 self-start p-1 transition-colors"
                 >
