@@ -56,6 +56,37 @@ export function getGreetingForPeriod(period: MealPeriod): { greeting: string; su
   }
 }
 
+function medianOf(values: number[]): number {
+  const v = values.filter(n => typeof n === 'number' && !Number.isNaN(n)).sort((a, b) => a - b);
+  if (v.length === 0) return 0;
+  const mid = Math.floor(v.length / 2);
+  return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
+}
+
+/**
+ * Score adjustment from the user's price sensitivity relative to the local median price.
+ * budget: rewards cheaper meals, penalises expensive ones. premium: the opposite. standard: neutral.
+ */
+export function priceSensitivityScore(
+  sensitivity: 'budget' | 'standard' | 'premium' | undefined,
+  price: number,
+  medianPrice: number
+): number {
+  if (!sensitivity || sensitivity === 'standard' || medianPrice <= 0) return 0;
+  const ratio = price / medianPrice;
+  if (sensitivity === 'budget') {
+    if (ratio <= 0.85) return 15;
+    if (ratio <= 1.0) return 8;
+    if (ratio >= 1.25) return -15;
+    return 0;
+  }
+  // premium
+  if (ratio >= 1.15) return 15;
+  if (ratio >= 1.0) return 8;
+  if (ratio <= 0.75) return -10;
+  return 0;
+}
+
 export function computeRecommendations({
   meals,
   restaurants,
@@ -84,6 +115,13 @@ export function computeRecommendations({
 
   const scoredCandidates: ScoredRecommendation[] = [];
 
+  const rejectedIds = new Set((userProfile.behavior?.rejectedMealIds || []).map(r => r.mealId));
+  const medianPrice = medianOf(
+    meals
+      .filter(m => restaurantMap.get(m.restaurantId)?.city === currentLocation.city)
+      .map(m => (currentLocation.currency === 'NGN' ? m.priceNGN : m.priceGBP))
+  );
+
   for (const meal of meals) {
     const restaurant = restaurantMap.get(meal.restaurantId);
     if (!restaurant) continue;
@@ -102,29 +140,31 @@ export function computeRecommendations({
       continue;
     }
 
-    // 3. Safety Layer: Hard Allergen Exclusion
+    // 3. Safety Layer: allergens are ALWAYS a hard exclusion, regardless of `strictSafetyEnforcement`.
+    // (That flag is kept for backwards compatibility only: a declared allergen must never be recommended.)
     const userAllergies = userProfile.safety?.allergies || [];
-    let safetyViolation = false;
-    let safetyWarning = '';
-
-    for (const allergen of userAllergies) {
-      if (meal.allergens?.includes(allergen)) {
-        safetyViolation = true;
-        safetyWarning = `Contains declared allergen: ${allergen}`;
-        break;
-      }
-    }
-
-    // Strict safety rejection: Unsafe meals MUST NOT enter recommendations
-    if (safetyViolation && userProfile.safety?.strictSafetyEnforcement) {
+    if (userAllergies.some(allergen => meal.allergens?.includes(allergen))) {
       continue;
     }
 
-    // Calculate real Haversine geospatial distance in km
+    // 4. Rejected meals are excluded (the user explicitly said no); they are not rotated back in.
+    if (rejectedIds.has(meal.id)) {
+      continue;
+    }
+
+    // Real Haversine distance in km. If either position is unknown we cannot vouch for delivery, so the meal is
+    // skipped (there is no silent Port Harcourt fallback).
     const distanceKm = getDistanceToRestaurant(currentLocation, restaurant.coordinates, restaurant.city);
-    if (distanceKm > maxDistanceKm) {
+    if (distanceKm === null || distanceKm > maxDistanceKm) {
       continue;
     }
+
+    // Dietary preference mismatches are WARNINGS only (they lower the score but do not exclude).
+    const wantedDiet = userProfile.preferences?.dietaryFlags || [];
+    const missingDiet = wantedDiet.filter(flag => !meal.dietaryFlags?.includes(flag));
+    const safetyWarning = missingDiet.length > 0
+      ? `Not marked ${missingDiet.map(f => f.replace('_', ' ')).join(', ')}`
+      : '';
 
     // --- LAYER 2: Explicit Preference Scoring ---
     let explicitScore = 0;
@@ -171,11 +211,6 @@ export function computeRecommendations({
       else if (ratingRecord.rating <= 2.5) behaviorScore -= 45;
     }
 
-    // Rejection penalty (reduces rank, does NOT permanently blacklist)
-    const rejectionRecord = userProfile.behavior?.rejectedMealIds?.find(r => r.mealId === meal.id);
-    if (rejectionRecord) {
-      behaviorScore -= 25;
-    }
 
     // --- LAYER 4: Context & Quality Scoring ---
     let contextScore = 0;
@@ -188,6 +223,10 @@ export function computeRecommendations({
     let distanceAndPriceScore = 0;
     if (distanceKm <= 2.5) distanceAndPriceScore += 20;
     else if (distanceKm <= 5.0) distanceAndPriceScore += 10;
+
+    // Price sensitivity, relative to the local price level (median of meals in this city)
+    const mealPrice = currentLocation.currency === 'NGN' ? meal.priceNGN : meal.priceGBP;
+    distanceAndPriceScore += priceSensitivityScore(userProfile.preferences?.priceSensitivity, mealPrice, medianPrice);
 
     const restaurantQualityScore = Math.round(restaurant.rating * 5) + (restaurant.reviewCount > 100 ? 5 : 0);
 
@@ -217,7 +256,7 @@ export function computeRecommendations({
       meal,
       restaurant,
       totalScore,
-      safetyPassed: !safetyViolation,
+      safetyPassed: true, // allergen matches never reach this point; dietary mismatches only set safetyWarning
       safetyWarning: safetyWarning || undefined,
       reasons: {
         explicitPreferenceScore: explicitScore,
@@ -247,13 +286,16 @@ export function computeRecommendations({
     };
   }
 
-  // --- LAYER 5: Diversity-Enforced Top-3 Selection ---
-  // Apply controlled diversity across category, cuisine, and meal type
-  const offset = skipCount % Math.max(1, totalEligible);
-  const rotatedCandidates = [
-    ...scoredCandidates.slice(offset),
-    ...scoredCandidates.slice(0, offset)
-  ];
+  // --- LAYER 5: Diversity-Enforced Top-N Selection ---
+  // "Show me something else" (skipCount) DROPS the top-ranked candidates the user has already been shown; it does not
+  // rotate them back. If the user has skipped past everything, we start over from the best match and say so.
+  let pool = scoredCandidates.slice(Math.min(skipCount, scoredCandidates.length));
+  let exhausted = false;
+  if (pool.length === 0) {
+    pool = scoredCandidates;
+    exhausted = true;
+  }
+  const rotatedCandidates = pool;
 
   const selected: ScoredRecommendation[] = [];
   const usedCategories = new Set<string>();
@@ -283,7 +325,9 @@ export function computeRecommendations({
   }
 
   let weakMatchWarning: string | undefined;
-  if (totalEligible < 3) {
+  if (exhausted) {
+    weakMatchWarning = "You've seen every option available right now, so we're showing the best matches again.";
+  } else if (totalEligible < 3) {
     weakMatchWarning = `Only ${totalEligible} open option(s) available right now.`;
   }
 

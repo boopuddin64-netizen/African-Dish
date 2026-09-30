@@ -179,7 +179,7 @@ export const CustomerProfileView: React.FC = () => {
       postcodeOrArea: newAddressArea || `${newAddressCity} area`,
       isDefault: newAddressIsDefault,
       currency: newAddressCity === 'Port Harcourt' ? 'NGN' : 'GBP',
-      coordinates: CITY_COORDINATES[newAddressCity] || CITY_COORDINATES['Port Harcourt']
+      coordinates: CITY_COORDINATES[newAddressCity]
     });
     setNewAddressLabel('');
     setNewAddressStreet('');

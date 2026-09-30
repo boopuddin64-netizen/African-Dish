@@ -544,6 +544,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       timestamp: new Date().toISOString()
     });
 
+    setSkipCount(0);
     setUserProfile(prev => {
       const newRejected = [...(prev.behavior.rejectedMealIds || []), {
         mealId,
@@ -559,8 +560,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
       return updated;
     });
-
-    showNextRecommendations();
+    // No skip bump needed: rejected meals are excluded by the engine, so the next-best pick appears automatically.
   };
 
   // Cart operations

@@ -36,7 +36,7 @@ export async function seedFirestoreInitialData(actor?: SeedActor | null): Promis
     if (restSnap.empty) {
       console.log('Seeding initial Demo Restaurants to Firestore (admin)...');
       for (const r of RESTAURANTS) {
-        const coords = CITY_COORDINATES[r.city] || CITY_COORDINATES['Port Harcourt'];
+        const coords = r.coordinates || CITY_COORDINATES[r.city];
         const demoRestaurant: Restaurant = {
           ...r,
           name: r.name.includes('[Demo]') ? r.name : `${r.name} [Demo]`,
@@ -47,7 +47,7 @@ export async function seedFirestoreInitialData(actor?: SeedActor | null): Promis
           status: 'open',
           acceptingOrders: true,
           isDemo: true,
-          coordinates: coords
+          ...(coords ? { coordinates: coords } : {})
         };
         await setDoc(doc(db, RESTAURANTS_COLLECTION, r.id), demoRestaurant);
       }

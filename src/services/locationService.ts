@@ -30,23 +30,30 @@ export function calculateHaversineDistanceKm(
   return Math.round(distance * 10) / 10; // 1 decimal place e.g. 2.4
 }
 
+export type Coordinates = { lat: number; lng: number };
+
+/** Known coordinates for a supported city, or undefined (no silent default city). */
+export function getCityCoordinates(city?: string): Coordinates | undefined {
+  return city ? CITY_COORDINATES[city] : undefined;
+}
+
 /**
- * Calculates distance between a user location and a restaurant.
+ * Distance in km between a user location and a restaurant, or `null` when either side's position cannot be
+ * determined. There is deliberately NO silent fallback to Port Harcourt; callers that want a default must pass
+ * `options.fallbackCity` explicitly.
  */
 export function getDistanceToRestaurant(
   userLocation: SavedLocation,
-  restaurantCoordinates?: { lat: number; lng: number },
-  restaurantCity?: string
-): number {
-  const userCoords = userLocation.coordinates || CITY_COORDINATES[userLocation.city] || CITY_COORDINATES['Port Harcourt'];
-  const restCoords = restaurantCoordinates || (restaurantCity ? CITY_COORDINATES[restaurantCity] : CITY_COORDINATES['Port Harcourt']);
+  restaurantCoordinates?: Coordinates,
+  restaurantCity?: string,
+  options: { fallbackCity?: string } = {}
+): number | null {
+  const fallback = getCityCoordinates(options.fallbackCity);
+  const userCoords = userLocation.coordinates || getCityCoordinates(userLocation.city) || fallback;
+  const restCoords = restaurantCoordinates || getCityCoordinates(restaurantCity) || fallback;
+  if (!userCoords || !restCoords) return null;
 
-  return calculateHaversineDistanceKm(
-    userCoords.lat,
-    userCoords.lng,
-    restCoords.lat,
-    restCoords.lng
-  );
+  return calculateHaversineDistanceKm(userCoords.lat, userCoords.lng, restCoords.lat, restCoords.lng);
 }
 
 export const MAX_SAVED_LOCATIONS = 10;
